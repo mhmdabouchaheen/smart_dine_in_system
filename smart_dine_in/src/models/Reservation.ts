@@ -1,7 +1,7 @@
 import { Schema, model, Document } from 'mongoose';
 
 export interface IReservation extends Document {
-  tableId: Schema.Types.ObjectId;
+  tableId: Schema.Types.ObjectId | string;
   customerId?: Schema.Types.ObjectId; // Optional if guest booking [cite: 1, 24]
   customerDetails: {
     fullName: string;
@@ -20,8 +20,7 @@ export interface IReservation extends Document {
 const ReservationSchema = new Schema<IReservation>(
   {
     tableId: { 
-      type: Schema.Types.ObjectId, 
-      ref: 'Table', 
+      type: Schema.Types.Mixed,
       required: true 
     },
     customerId: { 

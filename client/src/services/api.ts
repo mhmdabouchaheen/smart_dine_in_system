@@ -48,11 +48,91 @@ function delay<T>(value: T, ms = 250): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
 }
 
+function normalizeCategory(category: any): Category {
+  return {
+    _id: category._id || `cat-${Date.now()}`,
+    index: category.index || '0',
+    name: category.name || 'Untitled Category',
+    latin: category.latin || category.name || 'Untitled',
+    quote: category.quote || '',
+    servedNote: category.servedNote || '',
+  }
+}
+
+function normalizeMenuItem(item: any): MenuItem {
+  return {
+    _id: item._id || `item-${Date.now()}`,
+    categoryId: item.categoryId || '',
+    course: item.course || 1,
+    no: item.no || '01',
+    name: item.name || 'Untitled Dish',
+    tagline: item.tagline || item.description || 'Freshly prepared',
+    price: Number(item.price || 0),
+    description: item.description || '',
+    composition: Array.isArray(item.composition) ? item.composition : [],
+    pairing: item.pairing || '',
+    image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
+    isBestSeller: Boolean(item.isBestSeller),
+    isSeasonal: Boolean(item.isSeasonal),
+    soldCount: item.soldCount || 0,
+    recipe: Array.isArray(item.recipe)
+      ? item.recipe.map((line: any) => ({
+          ingredientId: line.ingredientId || line._id || '',
+          quantityRequired: Number(line.quantityRequired || 0),
+        }))
+      : [],
+    prepTimeMinutes: Number(item.preparationTime || item.prepTimeMinutes || 10),
+  }
+}
+
+function normalizeOrderRecord(order: any): OrderRecord {
+  const rawItems = Array.isArray(order.items) ? order.items : []
+  return {
+    _id: order._id || `order-${Date.now()}`,
+    tableId: order.tableId?._id || order.tableId || 'table-01',
+    tableNumber: Number(order.tableId?.tableNumber || order.tableNumber || 1),
+    items: rawItems.map((line: any) => ({
+      menuItemId: line.menuItemId || line._id || '',
+      name: line.name || 'Dish',
+      qty: Number(line.quantity || line.qty || 1),
+      price: Number(line.unitPrice || line.price || 0),
+    })),
+    total: Number(order.totalAmount || order.total || 0),
+    status: String(order.status || 'pending').toLowerCase(),
+    paymentMethod: 'card',
+    paymentStatus: String(order.paymentStatus || 'Pending').toLowerCase() === 'paid' ? 'paid' : 'unpaid',
+    needsAssistance: Boolean(order.needsAssistance),
+    note: order.note || '',
+    noteAt: order.noteAt || order.updatedAt || new Date().toISOString(),
+    createdAt: order.createdAt || new Date().toISOString(),
+    updatedAt: order.updatedAt || order.createdAt || new Date().toISOString(),
+  }
+}
+
+function normalizeReservationRecord(reservation: any): ReservationRecord {
+  const customer = reservation.customerDetails || {}
+  return {
+    _id: reservation._id || `res-${Date.now()}`,
+    tableId: reservation.tableId?._id || reservation.tableId || '',
+    name: customer.fullName || customer.name || '',
+    email: customer.email || '',
+    phone: customer.phone || '',
+    date: reservation.dateTime ? new Date(reservation.dateTime).toISOString().slice(0, 10) : '',
+    time: reservation.dateTime ? new Date(reservation.dateTime).toISOString().slice(11, 16) : '',
+    partySize: Number(reservation.partySize || 1),
+    notes: reservation.notes || '',
+    status: String(reservation.status || 'requested').toLowerCase(),
+    depositAmount: Number(reservation.depositAmount || 0),
+    paymentId: reservation.paymentId || '',
+    createdAt: reservation.createdAt || new Date().toISOString(),
+  }
+}
+
 // --- Menu ---------------------------------------------------------------
 export async function fetchCategories(): Promise<Category[]> {
   try {
-    const { data } = await apiClient.get<Category[]>('/categories')
-    return data
+    const { data } = await apiClient.get<any[]>('/menu/categories')
+    return data.map(normalizeCategory)
   } catch {
     return delay(menuStore.listCategories())
   }
@@ -60,8 +140,8 @@ export async function fetchCategories(): Promise<Category[]> {
 
 export async function createCategory(payload: Omit<Category, '_id'>): Promise<Category> {
   try {
-    const { data } = await apiClient.post<Category>('/categories', payload)
-    return data
+    const { data } = await apiClient.post<any>('/menu/categories', { name: payload.name })
+    return normalizeCategory(data)
   } catch {
     const category: Category = { _id: `cat-${Date.now()}`, ...payload }
     menuStore.saveCategory(category)
@@ -93,8 +173,16 @@ export async function deleteCategory(id: string): Promise<{ _id: string }> {
 
 export async function fetchMenu(): Promise<MenuItem[]> {
   try {
-    const { data } = await apiClient.get<MenuItem[]>('/menu')
-    return data
+    const { data: categoriesData } = await apiClient.get<any[]>('/menu/categories')
+    const categories = categoriesData || []
+    const allItems: MenuItem[] = []
+
+    for (const category of categories) {
+      const { data } = await apiClient.get<any[]>(`/menu/items/category/${category._id}`)
+      allItems.push(...(data || []).map(normalizeMenuItem))
+    }
+
+    return allItems
   } catch {
     return delay(menuStore.listMenuItems())
   }
@@ -102,8 +190,21 @@ export async function fetchMenu(): Promise<MenuItem[]> {
 
 export async function createMenuItem(payload: Omit<MenuItem, '_id'>): Promise<MenuItem> {
   try {
-    const { data } = await apiClient.post<MenuItem>('/menu', payload)
-    return data
+    const body = {
+      categoryId: payload.categoryId,
+      name: payload.name,
+      description: payload.description,
+      price: payload.price,
+      imageUrl: payload.image,
+      isAvailable: true,
+      preparationTime: payload.prepTimeMinutes || 10,
+      recipe: (payload.recipe || []).map((line) => ({
+        ingredientId: line.ingredientId,
+        quantityRequired: line.quantityRequired,
+      })),
+    }
+    const { data } = await apiClient.post<any>('/menu/items', body)
+    return normalizeMenuItem(data)
   } catch {
     const item: MenuItem = { _id: `item-${Date.now()}`, ...payload }
     menuStore.saveMenuItem(item)
@@ -113,8 +214,21 @@ export async function createMenuItem(payload: Omit<MenuItem, '_id'>): Promise<Me
 
 export async function updateMenuItem(id: string, payload: Partial<MenuItem>): Promise<MenuItem> {
   try {
-    const { data } = await apiClient.put<MenuItem>(`/menu/${id}`, payload)
-    return data
+    const body = {
+      categoryId: payload.categoryId,
+      name: payload.name,
+      description: payload.description,
+      price: payload.price,
+      imageUrl: payload.image,
+      isAvailable: true,
+      preparationTime: payload.prepTimeMinutes || 10,
+      recipe: (payload.recipe || []).map((line) => ({
+        ingredientId: line.ingredientId,
+        quantityRequired: line.quantityRequired,
+      })),
+    }
+    const { data } = await apiClient.put<any>(`/menu/items/${id}`, body)
+    return normalizeMenuItem(data)
   } catch {
     const existing = menuStore.getMenuItem(id)
     const updated = { ...(existing as MenuItem), ...payload, _id: id }
@@ -125,8 +239,8 @@ export async function updateMenuItem(id: string, payload: Partial<MenuItem>): Pr
 
 export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
   try {
-    const { data } = await apiClient.delete(`/menu/${id}`)
-    return data
+    const { data } = await apiClient.put<any>(`/menu/items/${id}`, { isAvailable: false })
+    return { _id: data?._id || id }
   } catch {
     menuStore.deleteMenuItem(id)
     return delay({ _id: id })
@@ -283,8 +397,8 @@ export async function fetchQRCodes(): Promise<QRCodeRecord[]> {
 // --- Orders ---------------------------------------------------------------
 export async function fetchOrders(): Promise<OrderRecord[]> {
   try {
-    const { data } = await apiClient.get<OrderRecord[]>('/orders')
-    return data
+    const { data } = await apiClient.get<any[]>('/orders/active')
+    return data.map(normalizeOrderRecord)
   } catch {
     return delay(ordersStore.listOrders())
   }
@@ -292,8 +406,8 @@ export async function fetchOrders(): Promise<OrderRecord[]> {
 
 export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
   try {
-    const { data } = await apiClient.get<OrderRecord>(`/orders/${id}`)
-    return data
+    const orders = await fetchOrders()
+    return orders.find((order) => order._id === id)
   } catch {
     return delay(ordersStore.getOrder(id))
   }
@@ -301,8 +415,16 @@ export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
 
 export async function createOrder(payload: CreateOrderPayload): Promise<OrderRecord> {
   try {
-    const { data } = await apiClient.post<OrderRecord>('/orders', payload)
-    return data
+    const { data } = await apiClient.post<any>('/orders', {
+      tableId: payload.tableId,
+      items: payload.items.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.qty,
+        specialInstructions: '',
+      })),
+      customerId: payload.tableId,
+    })
+    return normalizeOrderRecord(data)
   } catch {
     const now = new Date().toISOString()
     const order: OrderRecord = {
@@ -348,8 +470,11 @@ export async function updateOrder(id: string, updates: Partial<OrderRecord>): Pr
 
 export async function updateOrderStatus(id: string, status: OrderRecord['status']): Promise<OrderRecord> {
   try {
-    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}/status`, { status })
-    return data
+    const { data } = await apiClient.patch<any>(`/orders/${id}/status`, {
+      status: status.charAt(0).toUpperCase() + status.slice(1),
+      paymentStatus: 'Pending',
+    })
+    return normalizeOrderRecord(data)
   } catch {
     const updated = ordersStore.updateOrder(id, { status })
     return delay(updated as OrderRecord)
@@ -408,8 +533,8 @@ export async function markNotificationRead(id: string): Promise<{ _id: string }>
 // --- Reservations -----------------------------------------------------
 export async function fetchReservations(): Promise<ReservationRecord[]> {
   try {
-    const { data } = await apiClient.get<ReservationRecord[]>('/reservations')
-    return data
+    const { data } = await apiClient.get<any[]>('/reservations')
+    return data.map(normalizeReservationRecord)
   } catch {
     return delay(reservations)
   }
@@ -419,8 +544,18 @@ export async function createReservation(
   payload: ReservationPayload & { depositAmount: number; paymentId: string }
 ): Promise<ReservationRecord> {
   try {
-    const { data } = await apiClient.post<ReservationRecord>('/reservations', payload)
-    return data
+    const { data } = await apiClient.post<any>('/reservations', {
+      tableId: payload.tableId,
+      customerDetails: {
+        fullName: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+      },
+      dateTime: new Date(`${payload.date}T${payload.time}`).toISOString(),
+      partySize: payload.partySize,
+      notes: payload.notes || '',
+    })
+    return normalizeReservationRecord(data)
   } catch {
     return delay({
       _id: `res-local-${Date.now()}`,

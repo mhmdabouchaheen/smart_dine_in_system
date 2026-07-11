@@ -1,6 +1,31 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { Reservation } from '../models/Reservation';
 import { Table } from '../models/Table';
+
+const resolveTable = async (tableInput: unknown) => {
+  if (!tableInput) {
+    return null;
+  }
+
+  const input = tableInput.toString().trim();
+
+  if (mongoose.isValidObjectId(input)) {
+    return Table.findById(input);
+  }
+
+  const directNumber = Number(input);
+  if (!Number.isNaN(directNumber)) {
+    return Table.findOne({ tableNumber: directNumber });
+  }
+
+  const digitsMatch = input.match(/\d+/);
+  if (digitsMatch) {
+    return Table.findOne({ tableNumber: Number(digitsMatch[0]) });
+  }
+
+  return null;
+};
 
 export const createReservation = async (
   req: Request,
@@ -23,13 +48,6 @@ export const createReservation = async (
       status,
     } = body;
 
-    const table = await Table.findById(tableId);
-
-    if (!table) {
-      res.status(404).json({ error: 'Table not found' });
-      return;
-    }
-
     const normalizedCustomerDetails = {
       fullName: (customerDetails?.fullName || fullName || name || 'Guest').toString(),
       email: (customerDetails?.email || email || '').toString(),
@@ -42,8 +60,24 @@ export const createReservation = async (
         ? new Date(`${date}T${time}`)
         : new Date();
 
+    const table = await resolveTable(tableId);
+
+    if (!table) {
+      const reservation = await Reservation.create({
+        tableId: tableId?.toString() || 'unknown',
+        customerDetails: normalizedCustomerDetails,
+        dateTime: normalizedDateTime,
+        partySize: Number(partySize ?? 1),
+        notes: notes || '',
+        status: status || 'Pending',
+      });
+
+      res.status(201).json(reservation);
+      return;
+    }
+
     const reservation = await Reservation.create({
-      tableId,
+      tableId: table._id,
       customerDetails: normalizedCustomerDetails,
       dateTime: normalizedDateTime,
       partySize: Number(partySize ?? 1),
@@ -51,7 +85,7 @@ export const createReservation = async (
       status: status || 'Pending',
     });
 
-    await Table.findByIdAndUpdate(tableId, {
+    await Table.findByIdAndUpdate(table._id, {
       status: 'Reserved',
     });
 
