@@ -249,43 +249,23 @@ export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
 
 // --- Inventory --------------------------------------------------------------
 export async function fetchIngredients(): Promise<Ingredient[]> {
-  try {
-    const { data } = await apiClient.get<Ingredient[]>('/inventory')
-    return data
-  } catch {
-    return delay(inventoryStore.listIngredients())
-  }
+  return delay(inventoryStore.listIngredients())
 }
 
 export async function createIngredient(payload: Omit<Ingredient, '_id'>): Promise<Ingredient> {
-  try {
-    const { data } = await apiClient.post<Ingredient>('/inventory', payload)
-    return data
-  } catch {
-    const ingredient: Ingredient = { _id: `ing-${Date.now()}`, ...payload }
-    inventoryStore.createIngredient(ingredient)
-    return delay(ingredient)
-  }
+  const ingredient: Ingredient = { _id: `ing-${Date.now()}`, ...payload }
+  inventoryStore.createIngredient(ingredient)
+  return delay(ingredient)
 }
 
 export async function updateIngredient(id: string, payload: Partial<Ingredient>): Promise<Ingredient> {
-  try {
-    const { data } = await apiClient.put<Ingredient>(`/inventory/${id}`, payload)
-    return data
-  } catch {
-    const updated = inventoryStore.updateIngredient(id, payload)
-    return delay(updated as Ingredient)
-  }
+  const updated = inventoryStore.updateIngredient(id, payload)
+  return delay(updated as Ingredient)
 }
 
 export async function deleteIngredient(id: string): Promise<{ _id: string }> {
-  try {
-    const { data } = await apiClient.delete(`/inventory/${id}`)
-    return data
-  } catch {
-    inventoryStore.deleteIngredient(id)
-    return delay({ _id: id })
-  }
+  inventoryStore.deleteIngredient(id)
+  return delay({ _id: id })
 }
 
 // Checks whether enough stock exists for a prospective order. Always tries
