@@ -77,7 +77,7 @@ export const createReservation = async (
     }
 
     const reservation = await Reservation.create({
-      tableId: table._id,
+      tableId: table._id.toString(),
       customerDetails: normalizedCustomerDetails,
       dateTime: normalizedDateTime,
       partySize: Number(partySize ?? 1),
