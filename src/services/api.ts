@@ -1,0 +1,513 @@
+import axios from 'axios'
+import type {
+  Category,
+  MenuItem,
+  TableEntity,
+  FloorStats,
+  QRCodeRecord,
+  Employee,
+  NotificationRecord,
+  DashboardStats,
+  ReservationPayload,
+  ReservationRecord,
+  PaymentPayload,
+  PaymentRecord,
+  OrderRecord,
+  CreateOrderPayload,
+  AssistanceRequestPayload,
+  LoginPayload,
+  SignupPayload,
+  AuthUser,
+  Ingredient,
+  StockCheckResult,
+  OrderItemPayload,
+} from '../types'
+import { tables, floorStats, qrCodes, employees, dashboardStats, reservations } from './mockData'
+import * as ordersStore from './ordersStore'
+import * as notificationsStore from './notificationsStore'
+import * as menuStore from './menuStore'
+import * as inventoryStore from './inventoryStore'
+
+// Base URL for the Express server. Set VITE_API_URL in a .env file once the
+// backend (server/) is running, e.g. VITE_API_URL=http://localhost:5000/api
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+export const apiClient = axios.create({
+  baseURL: BASE_URL,
+  timeout: 8000,
+  headers: { 'Content-Type': 'application/json' },
+})
+
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('noir_sel_token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+function delay<T>(value: T, ms = 250): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(value), ms))
+}
+
+// --- Menu ---------------------------------------------------------------
+export async function fetchCategories(): Promise<Category[]> {
+  try {
+    const { data } = await apiClient.get<Category[]>('/categories')
+    return data
+  } catch {
+    return delay(menuStore.listCategories())
+  }
+}
+
+export async function createCategory(payload: Omit<Category, '_id'>): Promise<Category> {
+  try {
+    const { data } = await apiClient.post<Category>('/categories', payload)
+    return data
+  } catch {
+    const category: Category = { _id: `cat-${Date.now()}`, ...payload }
+    menuStore.saveCategory(category)
+    return delay(category)
+  }
+}
+
+export async function updateCategory(id: string, payload: Partial<Category>): Promise<Category> {
+  try {
+    const { data } = await apiClient.put<Category>(`/categories/${id}`, payload)
+    return data
+  } catch {
+    const existing = menuStore.listCategories().find((c) => c._id === id)
+    const updated = { ...(existing as Category), ...payload, _id: id }
+    menuStore.saveCategory(updated)
+    return delay(updated)
+  }
+}
+
+export async function deleteCategory(id: string): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.delete(`/categories/${id}`)
+    return data
+  } catch {
+    menuStore.deleteCategory(id)
+    return delay({ _id: id })
+  }
+}
+
+export async function fetchMenu(): Promise<MenuItem[]> {
+  try {
+    const { data } = await apiClient.get<MenuItem[]>('/menu')
+    return data
+  } catch {
+    return delay(menuStore.listMenuItems())
+  }
+}
+
+export async function createMenuItem(payload: Omit<MenuItem, '_id'>): Promise<MenuItem> {
+  try {
+    const { data } = await apiClient.post<MenuItem>('/menu', payload)
+    return data
+  } catch {
+    const item: MenuItem = { _id: `item-${Date.now()}`, ...payload }
+    menuStore.saveMenuItem(item)
+    return delay(item)
+  }
+}
+
+export async function updateMenuItem(id: string, payload: Partial<MenuItem>): Promise<MenuItem> {
+  try {
+    const { data } = await apiClient.put<MenuItem>(`/menu/${id}`, payload)
+    return data
+  } catch {
+    const existing = menuStore.getMenuItem(id)
+    const updated = { ...(existing as MenuItem), ...payload, _id: id }
+    menuStore.saveMenuItem(updated)
+    return delay(updated)
+  }
+}
+
+export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.delete(`/menu/${id}`)
+    return data
+  } catch {
+    menuStore.deleteMenuItem(id)
+    return delay({ _id: id })
+  }
+}
+
+// --- Inventory --------------------------------------------------------------
+export async function fetchIngredients(): Promise<Ingredient[]> {
+  try {
+    const { data } = await apiClient.get<Ingredient[]>('/inventory')
+    return data
+  } catch {
+    return delay(inventoryStore.listIngredients())
+  }
+}
+
+export async function createIngredient(payload: Omit<Ingredient, '_id'>): Promise<Ingredient> {
+  try {
+    const { data } = await apiClient.post<Ingredient>('/inventory', payload)
+    return data
+  } catch {
+    const ingredient: Ingredient = { _id: `ing-${Date.now()}`, ...payload }
+    inventoryStore.createIngredient(ingredient)
+    return delay(ingredient)
+  }
+}
+
+export async function updateIngredient(id: string, payload: Partial<Ingredient>): Promise<Ingredient> {
+  try {
+    const { data } = await apiClient.put<Ingredient>(`/inventory/${id}`, payload)
+    return data
+  } catch {
+    const updated = inventoryStore.updateIngredient(id, payload)
+    return delay(updated as Ingredient)
+  }
+}
+
+export async function deleteIngredient(id: string): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.delete(`/inventory/${id}`)
+    return data
+  } catch {
+    inventoryStore.deleteIngredient(id)
+    return delay({ _id: id })
+  }
+}
+
+// Checks whether enough stock exists for a prospective order. Always tries
+// a real endpoint first — in production this MUST be re-verified and
+// applied atomically server-side (read-check-decrement in one transaction)
+// to avoid a race between two guests ordering the last portions at once.
+export async function checkStock(items: OrderItemPayload[]): Promise<StockCheckResult> {
+  try {
+    const { data } = await apiClient.post<StockCheckResult>('/inventory/check', { items })
+    return data
+  } catch {
+    const menuItems = menuStore.listMenuItems()
+    const ingredientList = inventoryStore.listIngredients()
+    const ingredientById = new Map(ingredientList.map((i) => [i._id, i]))
+    const requiredByIngredient = new Map<string, number>()
+    const issues: StockCheckResult['issues'] = []
+
+    for (const line of items) {
+      const menuItem = menuItems.find((m) => m._id === line.menuItemId)
+      if (!menuItem?.recipe) continue
+      for (const req of menuItem.recipe) {
+        const key = req.ingredientId
+        requiredByIngredient.set(key, (requiredByIngredient.get(key) || 0) + req.quantityRequired * line.qty)
+      }
+    }
+
+    for (const line of items) {
+      const menuItem = menuItems.find((m) => m._id === line.menuItemId)
+      if (!menuItem?.recipe) continue
+      for (const req of menuItem.recipe) {
+        const ingredient = ingredientById.get(req.ingredientId)
+        if (!ingredient) continue
+        const totalNeeded = requiredByIngredient.get(req.ingredientId) || 0
+        if (totalNeeded > ingredient.quantityInStock) {
+          issues.push({
+            menuItemId: menuItem._id,
+            menuItemName: menuItem.name,
+            ingredientName: ingredient.name,
+            needed: totalNeeded,
+            available: ingredient.quantityInStock,
+            unit: ingredient.unit,
+          })
+        }
+      }
+    }
+
+    // De-duplicate: one issue per (menuItem, ingredient) pair
+    const deduped = Array.from(new Map(issues.map((i) => [`${i.menuItemId}:${i.ingredientName}`, i])).values())
+    return delay({ ok: deduped.length === 0, issues: deduped })
+  }
+}
+
+// --- Tables / Floor -------------------------------------------------------
+export async function fetchTables(): Promise<TableEntity[]> {
+  try {
+    const { data } = await apiClient.get<TableEntity[]>('/tables')
+    return data
+  } catch {
+    return delay(tables)
+  }
+}
+
+export async function fetchFloorStats(): Promise<FloorStats> {
+  try {
+    const { data } = await apiClient.get<FloorStats>('/tables/stats')
+    return data
+  } catch {
+    return delay(floorStats)
+  }
+}
+
+export async function createTable(payload: {
+  tableNumber: number
+  zone: string
+  capacity: number
+}): Promise<{ table: TableEntity; qrCode: QRCodeRecord }> {
+  try {
+    const { data } = await apiClient.post('/tables', payload)
+    return data
+  } catch {
+    const table: TableEntity = {
+      _id: `table-local-${Date.now()}`,
+      tableNumber: payload.tableNumber,
+      zone: payload.zone,
+      capacity: payload.capacity,
+      status: 'available',
+    }
+    const qrCode: QRCodeRecord = {
+      _id: `qr-local-${Date.now()}`,
+      tableId: table._id,
+      tableNumber: table.tableNumber,
+      qrToken: `TOK-${table.tableNumber}-${Math.random().toString(36).slice(2, 8)}`,
+      url: `https://noirandsel.example/order?table=${table.tableNumber}`,
+      createdAt: new Date().toISOString(),
+    }
+    return delay({ table, qrCode })
+  }
+}
+
+export async function fetchQRCodes(): Promise<QRCodeRecord[]> {
+  try {
+    const { data } = await apiClient.get<QRCodeRecord[]>('/tables/qr-codes')
+    return data
+  } catch {
+    return delay(qrCodes)
+  }
+}
+
+// --- Orders ---------------------------------------------------------------
+export async function fetchOrders(): Promise<OrderRecord[]> {
+  try {
+    const { data } = await apiClient.get<OrderRecord[]>('/orders')
+    return data
+  } catch {
+    return delay(ordersStore.listOrders())
+  }
+}
+
+export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
+  try {
+    const { data } = await apiClient.get<OrderRecord>(`/orders/${id}`)
+    return data
+  } catch {
+    return delay(ordersStore.getOrder(id))
+  }
+}
+
+export async function createOrder(payload: CreateOrderPayload): Promise<OrderRecord> {
+  try {
+    const { data } = await apiClient.post<OrderRecord>('/orders', payload)
+    return data
+  } catch {
+    const now = new Date().toISOString()
+    const order: OrderRecord = {
+      _id: `order-${Date.now()}`,
+      tableId: payload.tableId,
+      tableNumber: payload.tableNumber,
+      items: payload.items,
+      total: payload.total,
+      status: 'pending',
+      paymentMethod: payload.paymentMethod,
+      paymentStatus: payload.paymentStatus,
+      needsAssistance: !!payload.needsAssistance,
+      createdAt: now,
+      updatedAt: now,
+    }
+    ordersStore.saveOrder(order)
+
+    // Mirrors the atomic "confirm & deduct" step a real backend would run
+    // inside the same transaction as order creation.
+    const recipesByMenuItemId = Object.fromEntries(
+      menuStore.listMenuItems().map((m) => [m._id, m.recipe || []])
+    )
+    inventoryStore.decrementForOrder(
+      payload.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty })),
+      recipesByMenuItemId
+    )
+
+    return delay(order)
+  }
+}
+
+export async function updateOrder(id: string, updates: Partial<OrderRecord>): Promise<OrderRecord> {
+  try {
+    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}`, updates)
+    return data
+  } catch {
+    // Updating (not just re-creating) resets updatedAt to "now" — this is
+    // what bumps an edited order back to the end of the kitchen queue.
+    const updated = ordersStore.updateOrder(id, updates)
+    return delay(updated as OrderRecord)
+  }
+}
+
+export async function updateOrderStatus(id: string, status: OrderRecord['status']): Promise<OrderRecord> {
+  try {
+    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}/status`, { status })
+    return data
+  } catch {
+    const updated = ordersStore.updateOrder(id, { status })
+    return delay(updated as OrderRecord)
+  }
+}
+
+export async function addOrderNote(id: string, note: string): Promise<OrderRecord> {
+  try {
+    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}/note`, { note })
+    return data
+  } catch {
+    const updated = ordersStore.updateOrder(id, { note, noteAt: new Date().toISOString() })
+    return delay(updated as OrderRecord)
+  }
+}
+
+export async function requestAssistance(payload: AssistanceRequestPayload): Promise<{ ok: true }> {
+  try {
+    await apiClient.post('/orders/assistance', payload)
+    return { ok: true }
+  } catch {
+    if (payload.orderId) ordersStore.updateOrder(payload.orderId, { needsAssistance: true })
+    notificationsStore.addNotification({
+      _id: `notif-${Date.now()}`,
+      userId: 'emp-02',
+      type: 'order',
+      message: `Table ${payload.tableNumber} needs a team member — ${payload.reason}`,
+      referenceId: payload.orderId,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    })
+    return delay({ ok: true as const })
+  }
+}
+
+// --- Notifications ---------------------------------------------------------
+export async function fetchNotifications(): Promise<NotificationRecord[]> {
+  try {
+    const { data } = await apiClient.get<NotificationRecord[]>('/notifications')
+    return data
+  } catch {
+    return delay(notificationsStore.listNotifications())
+  }
+}
+
+export async function markNotificationRead(id: string): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.put(`/notifications/${id}/read`, {})
+    return data
+  } catch {
+    notificationsStore.markRead(id)
+    return delay({ _id: id })
+  }
+}
+
+// --- Reservations -----------------------------------------------------
+export async function fetchReservations(): Promise<ReservationRecord[]> {
+  try {
+    const { data } = await apiClient.get<ReservationRecord[]>('/reservations')
+    return data
+  } catch {
+    return delay(reservations)
+  }
+}
+
+export async function createReservation(
+  payload: ReservationPayload & { depositAmount: number; paymentId: string }
+): Promise<ReservationRecord> {
+  try {
+    const { data } = await apiClient.post<ReservationRecord>('/reservations', payload)
+    return data
+  } catch {
+    return delay({
+      _id: `res-local-${Date.now()}`,
+      ...payload,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+    })
+  }
+}
+
+// --- Payments -----------------------------------------------------------
+export async function createPayment(payload: PaymentPayload): Promise<PaymentRecord> {
+  try {
+    const { data } = await apiClient.post<PaymentRecord>('/payments', payload)
+    return data
+  } catch {
+    // Simulate a payment gateway round trip
+    await delay(null, 900)
+    return {
+      _id: `pay-local-${Date.now()}`,
+      ...payload,
+      status: 'succeeded',
+      paidAt: new Date().toISOString(),
+    }
+  }
+}
+
+// --- Auth (guest + registered customers, staff) --------------------------
+export async function login(credentials: LoginPayload): Promise<{ token: string; user: AuthUser }> {
+  const { data } = await apiClient.post<{ token: string; user: AuthUser }>('/auth/login', credentials)
+  if (data?.token) localStorage.setItem('noir_sel_token', data.token)
+  return data
+}
+
+export async function signup(payload: SignupPayload): Promise<{ token: string; user: AuthUser }> {
+  const { data } = await apiClient.post<{ token: string; user: AuthUser }>('/auth/signup', payload)
+  if (data?.token) localStorage.setItem('noir_sel_token', data.token)
+  return data
+}
+
+export function logout(): void {
+  localStorage.removeItem('noir_sel_token')
+}
+
+// --- Staff / Employees ----------------------------------------------------
+export async function fetchEmployees(): Promise<Employee[]> {
+  try {
+    const { data } = await apiClient.get<Employee[]>('/staff')
+    return data
+  } catch {
+    return delay(employees)
+  }
+}
+
+export async function createEmployee(payload: Omit<Employee, '_id' | 'hiredAt'>): Promise<Employee> {
+  try {
+    const { data } = await apiClient.post<Employee>('/staff', payload)
+    return data
+  } catch {
+    return delay({ _id: `emp-local-${Date.now()}`, hiredAt: new Date().toISOString(), ...payload })
+  }
+}
+
+export async function updateEmployee(id: string, payload: Partial<Employee>): Promise<Employee> {
+  try {
+    const { data } = await apiClient.put<Employee>(`/staff/${id}`, payload)
+    return data
+  } catch {
+    return delay({ _id: id, ...payload } as Employee)
+  }
+}
+
+export async function deleteEmployee(id: string): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.delete(`/staff/${id}`)
+    return data
+  } catch {
+    return delay({ _id: id })
+  }
+}
+
+// --- Admin dashboard --------------------------------------------------------
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  try {
+    const { data } = await apiClient.get<DashboardStats>('/admin/dashboard')
+    return data
+  } catch {
+    return delay(dashboardStats)
+  }
+}
