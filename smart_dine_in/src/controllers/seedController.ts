@@ -5,7 +5,7 @@ import { Customer } from "../models/Customer";
 import { Ingredient } from "../models/Ingredient";
 import { Notification } from "../models/Notification";
 import { Payment } from "../models/Payment";
-
+import { Reservation } from '../models/Reservation';
 export const seedDatabase = async (
   req: Request,
   res: Response,

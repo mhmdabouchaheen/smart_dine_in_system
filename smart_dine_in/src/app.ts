@@ -6,6 +6,7 @@ import tableRoutes from './routes/tableRoutes'
 import orderRoutes from './routes/orderRoutes'
 import userRoutes from './routes/userRoutes'
 import seedRoutes from './routes/seedRoutes'
+import reservationRoutes from './routes/reservationRoutes';
 
 const app = express()
 
@@ -17,7 +18,7 @@ app.use(
 )
 
 app.use(express.json())
-
+app.use('/api/reservations', reservationRoutes);
 app.use('/api/menu', menuRoutes)
 app.use('/api/tables', tableRoutes)
 app.use('/api/orders', orderRoutes)

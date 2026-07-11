@@ -105,8 +105,13 @@ export function getTableQrCodeUrl(tableId) {
 // Not implemented by the backend yet
 // ---------------------------------------------------------------------
 
-export async function createReservation() {
-  throw new Error('Reservation API is not implemented in the backend')
+export async function createReservation(reservationPayload) {
+  const { data } = await apiClient.post(
+    '/reservations',
+    reservationPayload,
+  );
+
+  return data;
 }
 
 export async function createPayment() {

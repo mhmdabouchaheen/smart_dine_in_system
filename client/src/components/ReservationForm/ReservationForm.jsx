@@ -23,16 +23,39 @@ export default function ReservationForm() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    setStatus('submitting')
-    try {
-      await createReservation(form)
-      setStatus('success')
-      setForm(initialForm)
-    } catch {
-      setStatus('error')
-    }
+  e.preventDefault();
+
+  const params = new URLSearchParams(window.location.search);
+  const tableId = params.get('tableId');
+
+  if (!tableId) {
+    setStatus('error');
+    return;
   }
+
+  setStatus('submitting');
+
+  try {
+    await createReservation({
+      tableId,
+      customerDetails: {
+        fullName: form.name,
+        email: form.email,
+        phone: form.phone,
+      },
+      dateTime: new Date(
+        `${form.date}T${form.time}`,
+      ).toISOString(),
+      partySize: parseInt(form.partySize, 10),
+      notes: form.notes,
+    });
+
+    setStatus('success');
+    setForm(initialForm);
+  } catch {
+    setStatus('error');
+  }
+}
 
   return (
     <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">

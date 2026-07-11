@@ -42,11 +42,7 @@ const ReservationSchema = new Schema<IReservation>(
       required: true, 
       min: 1 
     },
-    seatingZone: {
-      type: String,
-      enum: ['The Counter', 'The Dining Room', 'The Private Cellar'],
-      required: true
-    },
+    
     status: { 
       type: String, 
       enum: ['Pending', 'Confirmed', 'Seated', 'Cancelled', 'No Show'], 
