@@ -66,3 +66,8 @@ curl -X POST http://localhost:5000/api/reservations \
 
 ### GET /seed
 - Seed demo data into the backend
+
+Example:
+```bash
+curl http://localhost:5000/api/seed
+```

@@ -25,8 +25,41 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 
 export const createMenuItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const newItem = await MenuItem.create(req.body);
-    globalCoalescer.invalidate(`menu:category:${req.body.categoryId}`);
+    const body = req.body || {};
+    const {
+      categoryId,
+      name,
+      description,
+      price,
+      imageUrl,
+      image,
+      isAvailable,
+      preparationTime,
+      prepTimeMinutes,
+      recipe,
+      recipeIngredients,
+      ...rest
+    } = body;
+
+    if (!categoryId || !name) {
+      res.status(400).json({ error: 'categoryId and name are required' });
+      return;
+    }
+
+    const normalizedItem = {
+      categoryId,
+      name,
+      description: description || '',
+      price: Number(price ?? 0),
+      imageUrl: imageUrl || image || 'https://example.com/default-food.jpg',
+      isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+      preparationTime: Number(preparationTime ?? prepTimeMinutes ?? 10),
+      recipe: Array.isArray(recipe) ? recipe : Array.isArray(recipeIngredients) ? recipeIngredients : [],
+      ...rest,
+    };
+
+    const newItem = await MenuItem.create(normalizedItem);
+    globalCoalescer.invalidate(`menu:category:${categoryId}`);
     res.status(201).json(newItem);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
