@@ -6,10 +6,8 @@ Follow these steps to run the project locally.
 
 Create a `.env` file in both folders:
 
-- `client/`
 - `smart_dine_in/`
 
-Fill them with the required environment variables for each app.
 
 ## 2. Install dependencies
 
