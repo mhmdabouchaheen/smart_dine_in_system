@@ -45,6 +45,21 @@ body {
   .divider {
     @apply h-px w-full bg-white/10;
   }
+  .field {
+    @apply w-full bg-transparent border border-white/15 px-4 py-3.5 text-sm text-bone transition-colors duration-200;
+  }
+  .field:focus {
+    @apply outline-none border-ember;
+  }
+  .field::placeholder {
+    @apply text-bone-faint;
+  }
+  .field option {
+    background-color: #111110;
+  }
+  .field-error {
+    @apply border-red-500/60;
+  }
   .noise-overlay {
     position: fixed;
     inset: 0;
