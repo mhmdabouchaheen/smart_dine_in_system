@@ -7,13 +7,21 @@ export const createReservation = async (
   res: Response,
 ): Promise<void> => {
   try {
+    const body = req.body || {};
     const {
       tableId,
       customerDetails,
       dateTime,
+      date,
+      time,
       partySize,
       notes,
-    } = req.body;
+      name,
+      fullName,
+      email,
+      phone,
+      status,
+    } = body;
 
     const table = await Table.findById(tableId);
 
@@ -22,13 +30,25 @@ export const createReservation = async (
       return;
     }
 
+    const normalizedCustomerDetails = {
+      fullName: (customerDetails?.fullName || fullName || name || 'Guest').toString(),
+      email: (customerDetails?.email || email || '').toString(),
+      phone: (customerDetails?.phone || phone || '').toString(),
+    };
+
+    const normalizedDateTime = dateTime
+      ? new Date(dateTime)
+      : date && time
+        ? new Date(`${date}T${time}`)
+        : new Date();
+
     const reservation = await Reservation.create({
       tableId,
-      customerDetails,
-      dateTime,
-      partySize,
-      notes,
-      status: 'Pending',
+      customerDetails: normalizedCustomerDetails,
+      dateTime: normalizedDateTime,
+      partySize: Number(partySize ?? 1),
+      notes: notes || '',
+      status: status || 'Pending',
     });
 
     await Table.findByIdAndUpdate(tableId, {
