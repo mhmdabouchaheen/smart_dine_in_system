@@ -633,7 +633,7 @@ export async function getCurrentUser(): Promise<{ user: AuthUser }> {
 }
 
 export async function signup(payload: SignupPayload): Promise<{ user: AuthUser }> {
-  const { data } = await apiClient.post<{ user: AuthUser }>('/users/register', payload)
+  const { data } = await apiClient.post<{ user: AuthUser }>('/customers/signup', payload)
   return data
 }
 

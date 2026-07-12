@@ -9,6 +9,7 @@ import seedRoutes from './routes/seedRoutes'
 import reservationRoutes from './routes/reservationRoutes';
 import authRoutes from './routes/authRoutes'
 import cookieParser from 'cookie-parser';
+import customerRoutes from './routes/customerRoutes';
 
 const app = express()
 
@@ -28,5 +29,6 @@ app.use('/api/orders', orderRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/seed', seedRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/customers', customerRoutes);
 
 export default app
