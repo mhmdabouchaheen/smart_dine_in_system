@@ -284,26 +284,61 @@ export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
 }
 
 // --- Inventory --------------------------------------------------------------
+function normalizeIngredient(item: any): Ingredient {
+  return {
+    _id: item._id,
+    name: item.name || '',
+    quantityInStock: Number(item.quantityInStock ?? 0),
+    unit: item.unit,
+    reorderThreshold: Number(
+      item.reorderThreshold ?? item.lowStockThreshold ?? 10,
+    ),
+  }
+}
+
 export async function fetchIngredients(): Promise<Ingredient[]> {
-  return delay(inventoryStore.listIngredients())
+  const { data } = await apiClient.get<any[]>('/inventory')
+  return data.map(normalizeIngredient)
 }
 
-export async function createIngredient(payload: Omit<Ingredient, '_id'>): Promise<Ingredient> {
-  const ingredient: Ingredient = { _id: `ing-${Date.now()}`, ...payload }
-  inventoryStore.createIngredient(ingredient)
-  return delay(ingredient)
+export async function createIngredient(
+  payload: Omit<Ingredient, '_id'>,
+): Promise<Ingredient> {
+  const { data } = await apiClient.post<any>('/inventory', {
+    name: payload.name,
+    quantityInStock: payload.quantityInStock,
+    unit: payload.unit,
+    reorderThreshold: payload.reorderThreshold,
+  })
+
+  return normalizeIngredient(data)
 }
 
-export async function updateIngredient(id: string, payload: Partial<Ingredient>): Promise<Ingredient> {
-  const updated = inventoryStore.updateIngredient(id, payload)
-  return delay(updated as Ingredient)
+export async function updateIngredient(
+  id: string,
+  payload: Partial<Ingredient>,
+): Promise<Ingredient> {
+  const body: Partial<Ingredient> = {
+    ...payload,
+  }
+
+  const { data } = await apiClient.put<any>(
+    `/inventory/${id}`,
+    body,
+  )
+
+  return normalizeIngredient(data)
 }
 
-export async function deleteIngredient(id: string): Promise<{ _id: string }> {
-  inventoryStore.deleteIngredient(id)
-  return delay({ _id: id })
-}
+export async function deleteIngredient(
+  id: string,
+): Promise<{ _id: string }> {
+  const { data } = await apiClient.delete<{ _id: string }>(
+    `/inventory/${id}`,
+  )
 
+  return data
+}
 // Checks whether enough stock exists for a prospective order. Always tries
 // a real endpoint first — in production this MUST be re-verified and
 // applied atomically server-side (read-check-decrement in one transaction)

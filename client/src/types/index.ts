@@ -70,9 +70,9 @@ export interface MenuItem {
 export interface Ingredient {
   _id: string
   name: string
-  unit: string
   quantityInStock: number
-  lowStockThreshold: number
+  unit: 'kg' | 'g' | 'L' | 'ml' | 'pieces'
+  reorderThreshold: number
 }
 
 export interface StockIssue {

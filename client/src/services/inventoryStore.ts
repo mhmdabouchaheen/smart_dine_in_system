@@ -22,8 +22,8 @@ export function getIngredient(id: string): Ingredient | undefined {
 }
 
 function maybeNotifyLowStock(before: Ingredient | undefined, after: Ingredient): void {
-  const wasAbove = !before || before.quantityInStock >= before.lowStockThreshold
-  const nowBelow = after.quantityInStock < after.lowStockThreshold
+  const wasAbove = !before || before.quantityInStock >= before.reorderThreshold
+  const nowBelow = after.quantityInStock < after.reorderThreshold
   // Only fire the moment stock *crosses* the threshold, so restocking or
   // repeated small edits don't spam duplicate alerts.
   if (wasAbove && nowBelow) {
@@ -31,7 +31,7 @@ function maybeNotifyLowStock(before: Ingredient | undefined, after: Ingredient):
       _id: `notif-${Date.now()}`,
       userId: 'emp-02',
       type: 'inventory',
-      message: `${after.name} is running low — ${after.quantityInStock} ${after.unit} left (threshold: ${after.lowStockThreshold}).`,
+      message: `${after.name} is running low — ${after.quantityInStock} ${after.unit} left (threshold: ${after.reorderThreshold}).`,
       referenceId: after._id,
       isRead: false,
       createdAt: new Date().toISOString(),
@@ -43,7 +43,7 @@ export function createIngredient(ingredient: Ingredient): Ingredient {
   const all = readAll()
   all.unshift(ingredient)
   writeAll(all)
-  if (ingredient.quantityInStock < ingredient.lowStockThreshold) {
+  if (ingredient.quantityInStock < ingredient.reorderThreshold) {
     maybeNotifyLowStock(undefined, ingredient)
   }
   return ingredient
