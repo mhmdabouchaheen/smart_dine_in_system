@@ -134,7 +134,12 @@ export interface OrderRecord {
   updatedAt: string
 }
 
-export type ReservationStatus = 'requested' | 'confirmed' | 'seated' | 'completed' | 'cancelled'
+export type ReservationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'seated'
+  | 'cancelled'
+  | 'no_show'
 
 export interface ReservationPayload {
   tableId: string

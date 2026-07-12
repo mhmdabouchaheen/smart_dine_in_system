@@ -1,12 +1,12 @@
-import express from 'express';
-import { generateQRCode } from '../controllers/tableController';
-// ... import your other controllers here
+import { Router } from 'express'
+import {
+  generateQRCode,
+  getTables,
+} from '../controllers/tableController'
 
-const router = express.Router();
+const router = Router()
 
-// ... your existing routes (e.g., router.post('/', createTable); )
+router.get('/', getTables)
+router.get('/:id/qrcode', generateQRCode)
 
-// Add this new route specifically for the QR code
-router.get('/:id/qrcode', generateQRCode);
-
-export default router;
+export default router

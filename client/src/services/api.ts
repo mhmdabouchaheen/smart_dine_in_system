@@ -84,7 +84,22 @@ function normalizeMenuItem(item: any): MenuItem {
     prepTimeMinutes: Number(item.preparationTime || item.prepTimeMinutes || 10),
   }
 }
+function normalizeOrderStatus(status: unknown): OrderRecord['status'] {
+  const normalized = String(status ?? 'pending').toLowerCase()
 
+  const allowedStatuses: OrderRecord['status'][] = [
+    'pending',
+    'preparing',
+    'ready',
+    'served',
+    'completed',
+    'cancelled',
+  ]
+
+  return allowedStatuses.includes(normalized as OrderRecord['status'])
+    ? (normalized as OrderRecord['status'])
+    : 'pending'
+}
 function normalizeOrderRecord(order: any): OrderRecord {
   const rawItems = Array.isArray(order.items) ? order.items : []
   return {
@@ -98,7 +113,7 @@ function normalizeOrderRecord(order: any): OrderRecord {
       price: Number(line.unitPrice || line.price || 0),
     })),
     total: Number(order.totalAmount || order.total || 0),
-    status: String(order.status || 'pending').toLowerCase(),
+    status: normalizeOrderStatus(order.status),
     paymentMethod: 'card',
     paymentStatus: String(order.paymentStatus || 'Pending').toLowerCase() === 'paid' ? 'paid' : 'unpaid',
     needsAssistance: Boolean(order.needsAssistance),
@@ -108,7 +123,28 @@ function normalizeOrderRecord(order: any): OrderRecord {
     updatedAt: order.updatedAt || order.createdAt || new Date().toISOString(),
   }
 }
+function normalizeReservationStatus(
+  status: unknown,
+): ReservationRecord['status'] {
+  const normalized = String(status ?? 'pending')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
 
+  const allowedStatuses: ReservationRecord['status'][] = [
+    'pending',
+    'confirmed',
+    'seated',
+    'cancelled',
+    'no_show',
+  ]
+
+  return allowedStatuses.includes(
+    normalized as ReservationRecord['status'],
+  )
+    ? (normalized as ReservationRecord['status'])
+    : 'pending'
+}
 function normalizeReservationRecord(reservation: any): ReservationRecord {
   const customer = reservation.customerDetails || {}
   return {
@@ -121,7 +157,7 @@ function normalizeReservationRecord(reservation: any): ReservationRecord {
     time: reservation.dateTime ? new Date(reservation.dateTime).toISOString().slice(11, 16) : '',
     partySize: Number(reservation.partySize || 1),
     notes: reservation.notes || '',
-    status: String(reservation.status || 'requested').toLowerCase(),
+    status: normalizeReservationStatus(reservation.status),
     depositAmount: Number(reservation.depositAmount || 0),
     paymentId: reservation.paymentId || '',
     createdAt: reservation.createdAt || new Date().toISOString(),
@@ -317,12 +353,38 @@ export async function checkStock(items: OrderItemPayload[]): Promise<StockCheckR
     return delay({ ok: deduped.length === 0, issues: deduped })
   }
 }
+function normalizeTableStatus(status: unknown): TableEntity['status'] {
+  const value = String(status ?? '').trim().toLowerCase()
 
+  switch (value) {
+    case 'available':
+      return 'available'
+
+    case 'occupied':
+      return 'seated'
+
+    case 'reserved':
+      return 'reserved'
+
+    case 'resetting':
+      return 'resetting'
+
+    default:
+      return 'resetting'
+  }
+}
 // --- Tables / Floor -------------------------------------------------------
 export async function fetchTables(): Promise<TableEntity[]> {
   try {
-    const { data } = await apiClient.get<TableEntity[]>('/tables')
-    return data
+    const { data } = await apiClient.get<any[]>('/tables')
+
+    return data.map((table) => ({
+      _id: table._id,
+      tableNumber: Number(table.tableNumber),
+      capacity: Number(table.capacity),
+      zone: table.zone || 'Dining Room',
+      status: normalizeTableStatus(table.status),
+    }))
   } catch {
     return delay(tables)
   }
@@ -540,7 +602,7 @@ export async function createReservation(
     return delay({
       _id: `res-local-${Date.now()}`,
       ...payload,
-      status: 'confirmed',
+      status: 'pending',
       createdAt: new Date().toISOString(),
     })
   }

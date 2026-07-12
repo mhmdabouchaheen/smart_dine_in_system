@@ -1,35 +1,60 @@
-import { Request, Response } from 'express';
-import QRCode from 'qrcode';
-import { Table } from '../models/Table';
-// ... (your existing table controllers like createTable, getTables, etc.) ...
+import { Request, Response } from 'express'
+import QRCode from 'qrcode'
+import { Table } from '../models/Table'
 
-export const generateQRCode = async (req: Request, res: Response): Promise<any> => {
+export const getTables = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
-    const tableId = req.params.id;
+    const tables = await Table.find().sort({ tableNumber: 1 })
 
-    // 1. Verify the table actually exists in the database
-    const table = await Table.findById(tableId);
+    res.status(200).json(tables)
+  } catch (error) {
+    console.error('❌ Error fetching tables:', error)
+
+    res.status(500).json({
+      error: 'Failed to fetch tables',
+    })
+  }
+}
+
+export const generateQRCode = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const tableId = req.params.id
+
+    const table = await Table.findById(tableId)
+
     if (!table) {
-      return res.status(404).json({ error: "Table not found" });
+      res.status(404).json({
+        error: 'Table not found',
+      })
+      return
     }
 
-    // 2. Construct the URL (we use an env variable for flexibility, defaulting to localhost:3000 for React)
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const frontendMenuUrl = `${baseUrl}/menu?tableId=${tableId}`;
+    const baseUrl =
+      process.env.FRONTEND_URL || 'http://localhost:5174'
 
-    // 3. Generate the QR code as a Base64 image string
-    const qrCodeImage = await QRCode.toDataURL(frontendMenuUrl);
+    const frontendMenuUrl =
+      `${baseUrl}/menu?tableId=${tableId}`
 
-    // 4. Send the image string back to the client
-    return res.status(200).json({
-      message: "QR Code generated successfully",
+    const qrCodeImage =
+      await QRCode.toDataURL(frontendMenuUrl)
+
+    res.status(200).json({
+      message: 'QR Code generated successfully',
       tableId: table._id,
       url: frontendMenuUrl,
-      qrCode: qrCodeImage 
-    });
-
+      qrCode: qrCodeImage,
+    })
   } catch (error) {
-    console.error("❌ Error generating QR Code:", error);
-    return res.status(500).json({ error: "Failed to generate QR code" });
+    console.error('❌ Error generating QR Code:', error)
+
+    res.status(500).json({
+      error: 'Failed to generate QR code',
+    })
   }
-};
+}
