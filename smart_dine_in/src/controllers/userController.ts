@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User'; 
+import jwt from 'jsonwebtoken';
 
 export const registerUser = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -27,16 +28,34 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
     // 4. Save to database
     await newUser.save();
 
+    const token = jwt.sign(
+  {
+    id: newUser._id,
+    role: newUser.role
+  },
+  process.env.JWT_SECRET as string,
+  {
+    expiresIn: '7d'
+  }
+);
+
     // 5. Send success response (Notice we do NOT send the password back!)
-    return res.status(201).json({
-      message: "User created successfully!",
-      user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role
-      }
-    });
+    res.cookie('token', token, {
+  httpOnly: true,
+  secure: false,
+  sameSite: 'lax',
+  maxAge: 7 * 24 * 60 * 60 * 1000
+});
+
+return res.status(201).json({
+  message: "User created successfully!",
+  user: {
+    _id: newUser._id,
+    name: newUser.name,
+    email: newUser.email,
+    role: newUser.role
+  }
+});
 
   } catch (error) {
     console.error("❌ Error registering user:", error);

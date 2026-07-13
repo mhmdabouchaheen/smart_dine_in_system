@@ -35,14 +35,10 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   timeout: 8000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
 
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('noir_sel_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
 
 function delay<T>(value: T, ms = 250): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
@@ -661,20 +657,23 @@ export async function createPayment(payload: PaymentPayload): Promise<PaymentRec
 }
 
 // --- Auth (guest + registered customers, staff) --------------------------
-export async function login(credentials: LoginPayload): Promise<{ token: string; user: AuthUser }> {
-  const { data } = await apiClient.post<{ token: string; user: AuthUser }>('/auth/login', credentials)
-  if (data?.token) localStorage.setItem('noir_sel_token', data.token)
+export async function login(credentials: LoginPayload): Promise<{ user: AuthUser }> {
+  const { data } = await apiClient.post<{ user: AuthUser }>('/auth/login', credentials)
   return data
 }
 
-export async function signup(payload: SignupPayload): Promise<{ token: string; user: AuthUser }> {
-  const { data } = await apiClient.post<{ token: string; user: AuthUser }>('/auth/signup', payload)
-  if (data?.token) localStorage.setItem('noir_sel_token', data.token)
+export async function getCurrentUser(): Promise<{ user: AuthUser }> {
+  const { data } = await apiClient.get('/auth/me')
   return data
 }
 
-export function logout(): void {
-  localStorage.removeItem('noir_sel_token')
+export async function signup(payload: SignupPayload): Promise<{ user: AuthUser }> {
+  const { data } = await apiClient.post<{ user: AuthUser }>('/customers/signup', payload)
+  return data
+}
+
+export async function logout(): Promise<void> {
+  await apiClient.post('/auth/logout')
 }
 
 // --- Staff / Employees ----------------------------------------------------

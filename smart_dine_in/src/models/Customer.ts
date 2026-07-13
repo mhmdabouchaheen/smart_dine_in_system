@@ -2,26 +2,42 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICustomer extends Document {
   isGuest: boolean;
-  name?: string; 
-  email?: string; // Only required if isGuest is false
+  name?: string;
+  email?: string;
+  passwordHash?: string;
   loyaltyPoints: number;
 }
 
-const CustomerSchema: Schema = new Schema({
-  isGuest: {
-    type: Boolean,
-    default: true // Defaults to guest unless they explicitly log in
+const CustomerSchema: Schema = new Schema(
+  {
+    isGuest: {
+      type: Boolean,
+      default: true,
+    },
+
+    name: {
+      type: String,
+      required: false,
+    },
+
+    email: {
+      type: String,
+      unique: true,
+      sparse: true,
+      required: false,
+    },
+
+    passwordHash: {
+      type: String,
+      required: false,
+    },
+
+    loyaltyPoints: {
+      type: Number,
+      default: 0,
+    },
   },
-  name: { type: String, required: false },
-  email: { 
-    type: String, 
-    unique: true, 
-    sparse: true // Allows multiple guests to not have an email
-  },
-  loyaltyPoints: { 
-    type: Number, 
-    default: 0 // Will increase as they complete orders
-  }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 export const Customer = mongoose.model<ICustomer>('Customer', CustomerSchema);
