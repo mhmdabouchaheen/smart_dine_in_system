@@ -16,8 +16,10 @@ interface Form {
 
 const emptyForm: Form = { name: '', unit: '', quantityInStock: '', lowStockThreshold: '' }
 
+type IngredientWithThreshold = Ingredient & { lowStockThreshold: number }
+
 export default function Inventory() {
-  const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [ingredients, setIngredients] = useState<IngredientWithThreshold[]>([])
   const [isLoading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -32,7 +34,8 @@ export default function Inventory() {
 
   async function load() {
     setLoading(true)
-    setIngredients(await fetchIngredients())
+    const fetched = await fetchIngredients() as Ingredient[]
+    setIngredients(fetched.map((ing) => ({ ...ing, lowStockThreshold: ing.reorderThreshold })))
     setLoading(false)
   }
 
@@ -43,7 +46,7 @@ export default function Inventory() {
     setModalOpen(true)
   }
 
-  function openEdit(ing: Ingredient) {
+  function openEdit(ing: IngredientWithThreshold) {
     setEditingId(ing._id)
     setForm({
       name: ing.name,
@@ -78,16 +81,16 @@ export default function Inventory() {
     try {
       const payload = {
         name: form.name,
-        unit: form.unit,
+        unit: form.unit as "kg" | "g" | "L" | "ml" | "pieces",
         quantityInStock: Number(form.quantityInStock),
-        lowStockThreshold: Number(form.lowStockThreshold),
+        reorderThreshold: Number(form.lowStockThreshold),
       }
       if (editingId) {
-        const updated = await updateIngredient(editingId, payload)
-        setIngredients((prev) => prev.map((i) => (i._id === editingId ? updated : i)))
+        const updated = await updateIngredient(editingId, payload) as Ingredient
+        setIngredients((prev) => prev.map((i) => (i._id === editingId ? { ...updated, lowStockThreshold: updated.reorderThreshold } : i)))
       } else {
-        const created = await createIngredient(payload)
-        setIngredients((prev) => [created, ...prev])
+        const created = await createIngredient(payload) as Ingredient
+        setIngredients((prev) => [{ ...created, lowStockThreshold: created.reorderThreshold }, ...prev])
       }
       setModalOpen(false)
     } finally {

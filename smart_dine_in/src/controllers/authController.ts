@@ -159,8 +159,29 @@ export const getCurrentUser = async (
   try {
     const authReq = req as any;
 
+    const { id, role } = authReq.user;
+
+    let account;
+
+    if (role === "Customer") {
+      account = await Customer.findById(id);
+    } else {
+      account = await User.findById(id);
+    }
+
+    if (!account) {
+      return res.status(404).json({
+        error: "User not found"
+      });
+    }
+
     return res.status(200).json({
-      user: authReq.user
+      user: {
+        _id: account._id,
+        name: account.name,
+        email: account.email,
+        role: role
+      }
     });
 
   } catch (error) {
