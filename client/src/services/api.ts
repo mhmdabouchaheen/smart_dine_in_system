@@ -6,7 +6,7 @@ import type {
   FloorStats,
   QRCodeRecord,
   Employee,
-  NotificationRecord,
+  
   DashboardStats,
   ReservationPayload,
   ReservationRecord,
@@ -24,10 +24,13 @@ import type {
 } from '../types'
 import { tables, floorStats, qrCodes, employees, dashboardStats, reservations } from './mockData'
 import * as ordersStore from './ordersStore'
-import * as notificationsStore from './notificationsStore'
+import type {
+  CreateNotificationPayload,
+  NotificationRecord,
+} from '../types'
 import * as menuStore from './menuStore'
 import * as inventoryStore from './inventoryStore'
-
+import * as notificationsStore from './notificationsStore'
 // Base URL for the Express server. Set VITE_API_URL in a .env file once the
 // backend (server/) is running, e.g. VITE_API_URL=http://localhost:5000/api
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -278,6 +281,7 @@ export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
     return delay({ _id: id })
   }
 }
+
 
 // --- Inventory --------------------------------------------------------------
 function normalizeIngredient(item: any): Ingredient {
@@ -564,44 +568,99 @@ export async function addOrderNote(id: string, note: string): Promise<OrderRecor
   }
 }
 
-export async function requestAssistance(payload: AssistanceRequestPayload): Promise<{ ok: true }> {
-  try {
-    await apiClient.post('/orders/assistance', payload)
-    return { ok: true }
-  } catch {
-    if (payload.orderId) ordersStore.updateOrder(payload.orderId, { needsAssistance: true })
-    notificationsStore.addNotification({
-      _id: `notif-${Date.now()}`,
-      userId: 'emp-02',
-      type: 'order',
-      message: `Table ${payload.tableNumber} needs a team member — ${payload.reason}`,
-      referenceId: payload.orderId,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    })
-    return delay({ ok: true as const })
-  }
+export async function requestAssistance(
+  payload: AssistanceRequestPayload,
+): Promise<{ ok: true }> {
+  await apiClient.post('/orders/assistance', payload)
+
+  return { ok: true }
 }
 
 // --- Notifications ---------------------------------------------------------
+// --- Notifications -------------------------------------------
+
 export async function fetchNotifications(): Promise<NotificationRecord[]> {
   try {
-    const { data } = await apiClient.get<NotificationRecord[]>('/notifications')
+    const { data } = await apiClient.get<any[]>('/notifications')
     return data
   } catch {
     return delay(notificationsStore.listNotifications())
   }
 }
 
-export async function markNotificationRead(id: string): Promise<{ _id: string }> {
+export async function createNotification(
+  payload: CreateNotificationPayload,
+): Promise<NotificationRecord> {
   try {
-    const { data } = await apiClient.put(`/notifications/${id}/read`, {})
+    const { data } = await apiClient.post<any>('/notifications', payload)
+    return data
+  } catch {
+    // If the request failed due to not being authenticated, try the public endpoint
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err: any = arguments[0]
+      // If Axios-like error with a 401, try the public route
+      // (Guests can submit notifications via /notifications/public)
+      // Note: we defensively attempt this even if the original error isn't 401.
+      const { data } = await apiClient.post<any>('/notifications/public', payload)
+      return data
+    } catch {
+      const created = notificationsStore.addNotification({
+        _id: `notif-${Date.now()}`,
+        message: payload.message,
+        type: payload.type,
+        senderId: 'local-user',
+        senderModel: 'User',
+        senderRole: 'Admin',
+        recipientRole: payload.recipientRole,
+        recipientId: payload.recipientId,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      })
+
+      return delay(created)
+    }
+  }
+}
+
+export async function markNotificationRead(
+  id: string,
+): Promise<NotificationRecord> {
+  try {
+    const { data } = await apiClient.put<any>(`/notifications/${id}/read`, {})
     return data
   } catch {
     notificationsStore.markRead(id)
-    return delay({ _id: id })
+    return delay(notificationsStore.listNotifications().find((item) => item._id === id) as NotificationRecord)
   }
 }
+
+export async function markAllNotificationsRead(): Promise<{ modifiedCount: number }> {
+  try {
+    const { data } = await apiClient.put<{ modifiedCount: number }>('/notifications/read-all', {})
+    return data
+  } catch {
+    const items = notificationsStore.listNotifications().map((item) => ({ ...item, isRead: true }))
+    const storageKey = 'noir_sel_notifications_db'
+    localStorage.setItem(storageKey, JSON.stringify(items))
+    return { modifiedCount: items.length }
+  }
+}
+
+export async function deleteNotification(
+  id: string,
+): Promise<{ _id: string }> {
+  try {
+    const { data } = await apiClient.delete<{ _id: string }>(`/notifications/${id}`)
+    return data
+  } catch {
+    const all = notificationsStore.listNotifications().filter((item) => item._id !== id)
+    const storageKey = 'noir_sel_notifications_db'
+    localStorage.setItem(storageKey, JSON.stringify(all))
+    return { _id: id }
+  }
+}
+
 
 // --- Reservations -----------------------------------------------------
 export async function fetchReservations(): Promise<ReservationRecord[]> {
