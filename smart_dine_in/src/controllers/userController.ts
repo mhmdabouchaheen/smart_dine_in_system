@@ -42,9 +42,9 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
     // 5. Send success response (Notice we do NOT send the password back!)
     res.cookie('token', token, {
   httpOnly: true,
-  secure: false,
-  sameSite: 'lax',
-  maxAge: 7 * 24 * 60 * 60 * 1000
+  secure: true,
+  sameSite: 'none',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 });
 
 return res.status(201).json({

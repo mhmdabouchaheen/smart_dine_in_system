@@ -51,9 +51,9 @@ const token = jwt.sign(
     // 3. Return user info (without password)
     res.cookie('token', token, {
   httpOnly: true,
-  secure: false, // change to true in production with HTTPS
-  sameSite: 'lax',
-  maxAge: 7 * 24 * 60 * 60 * 1000
+  secure: true,
+  sameSite: 'none',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 });
 
 return res.status(200).json({
@@ -118,7 +118,7 @@ export const signupCustomer = async (
     res.cookie("token", token, {
       httpOnly: true,
       secure: false,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
