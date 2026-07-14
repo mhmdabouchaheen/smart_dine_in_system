@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { Types } from 'mongoose'
 import { Ingredient } from '../models/Ingredient'
+import { MenuItem } from '../models/MenuItem'
 
 const ALLOWED_UNITS = ['kg', 'g', 'L', 'ml', 'pieces'] as const
 
@@ -12,6 +13,95 @@ export const getIngredients = async (
     const ingredients = await Ingredient.find().sort({ name: 1 })
 
     res.status(200).json(ingredients)
+  } catch (error) {
+    res.status(500).json({
+      error: (error as Error).message,
+    })
+  }
+}
+
+export const checkInventory = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const items = Array.isArray(req.body.items) ? req.body.items : []
+    const menuItemIds = items
+      .map((item: any) => item.menuItemId)
+      .filter(Boolean)
+
+    const menuItems = await MenuItem.find({
+      _id: { $in: menuItemIds },
+    })
+
+    const ingredientIds = menuItems
+      .flatMap((menuItem) => (menuItem.recipe || []).map((recipe) => String(recipe.ingredientId)))
+      .filter(Boolean)
+
+    const ingredients = await Ingredient.find({
+      _id: { $in: ingredientIds },
+    })
+
+    const ingredientById = new Map(
+      ingredients.map((ingredient) => [String(ingredient._id), ingredient]),
+    )
+
+    const requiredByIngredient = new Map<string, number>()
+    const issues: Array<{
+      menuItemId: string
+      menuItemName: string
+      ingredientName: string
+      needed: number
+      available: number
+      unit: string
+    }> = []
+
+    for (const line of items) {
+      const menuItem = menuItems.find(
+        (menuItem) => String(menuItem._id) === String(line.menuItemId),
+      )
+      if (!menuItem?.recipe) continue
+
+      for (const reqLine of menuItem.recipe) {
+        const ingredientId = String(reqLine.ingredientId)
+        const qty = Number(line.qty ?? 0)
+        if (qty <= 0) continue
+        requiredByIngredient.set(
+          ingredientId,
+          (requiredByIngredient.get(ingredientId) || 0) + Number(reqLine.quantityRequired || 0) * qty,
+        )
+      }
+    }
+
+    for (const line of items) {
+      const menuItem = menuItems.find(
+        (menuItem) => String(menuItem._id) === String(line.menuItemId),
+      )
+      if (!menuItem?.recipe) continue
+
+      for (const reqLine of menuItem.recipe) {
+        const ingredient = ingredientById.get(String(reqLine.ingredientId))
+        if (!ingredient) continue
+
+        const totalNeeded = requiredByIngredient.get(String(reqLine.ingredientId)) || 0
+        if (totalNeeded > ingredient.quantityInStock) {
+          issues.push({
+            menuItemId: String(menuItem._id),
+            menuItemName: menuItem.name,
+            ingredientName: ingredient.name,
+            needed: totalNeeded,
+            available: ingredient.quantityInStock,
+            unit: ingredient.unit,
+          })
+        }
+      }
+    }
+
+    const deduped = Array.from(
+      new Map(issues.map((issue) => [`${issue.menuItemId}:${issue.ingredientName}`, issue])).values(),
+    )
+
+    res.status(200).json({ ok: deduped.length === 0, issues: deduped })
   } catch (error) {
     res.status(500).json({
       error: (error as Error).message,

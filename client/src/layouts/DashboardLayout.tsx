@@ -13,7 +13,7 @@ import {
   BookOpen,
   Boxes,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/authContextValue'
 import NotificationBell from '../components/ui/NotificationBell'
 
 interface NavItem {

@@ -1,19 +1,21 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useState } from 'react'
-import { X, Minus, Plus, Trash2, CreditCard, UserRound, Lock, CheckCircle2, Pencil } from 'lucide-react'
-import { useCart } from '../../context/CartContext'
-import { createPayment, requestAssistance, checkStock } from '../../services/api'
-import Button from '../ui/Button'
-import { TextInput } from '../ui/FormField'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, CreditCard, Lock, Minus, Pencil, Plus, Trash2, UserRound, X } from 'lucide-react'
+
+import { useCart } from '../../context/cartContextValue'
+import { checkStock, createPayment, fetchTableOrders, requestAssistance } from '../../services/api'
+import type { OrderRecord } from '../../types'
+import { getCurrentTableId } from '../../utils/session'
 import {
-  validateName,
-  validateCardNumber,
-  validateCardExpiry,
-  validateCVV,
   hasErrors,
+  validateCVV,
+  validateCardExpiry,
+  validateCardNumber,
+  validateName,
   type FieldErrors,
 } from '../../utils/validation'
-import type { OrderRecord } from '../../types'
+import Button from '../ui/Button'
+import { TextInput } from '../ui/FormField'
 
 type Stage = 'items' | 'method' | 'card' | 'receipt' | 'placed'
 
@@ -23,6 +25,7 @@ interface CardForm {
   expiry: string
   cvv: string
 }
+
 const emptyCard: CardForm = { cardName: '', cardNumber: '', expiry: '', cvv: '' }
 
 const STATUS_LABEL: Record<OrderRecord['status'], string> = {
@@ -32,6 +35,10 @@ const STATUS_LABEL: Record<OrderRecord['status'], string> = {
   served: 'Served',
   completed: 'Completed',
   cancelled: 'Cancelled',
+}
+
+function formatMoney(value: number): string {
+  return `$${value.toFixed(2)}`
 }
 
 export default function OrderDrawer() {
@@ -60,8 +67,26 @@ export default function OrderDrawer() {
   const [isRequestingHelp, setRequestingHelp] = useState(false)
   const [stockIssues, setStockIssues] = useState<string[]>([])
   const [isCheckingStock, setCheckingStock] = useState(false)
+  const [myOrders, setMyOrders] = useState<OrderRecord[]>([])
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false)
+  const tableId = getCurrentTableId()
+
+  useEffect(() => {
+    if (!isDrawerOpen || !tableId) return
+
+    setIsFetchingOrders(true)
+    fetchTableOrders(tableId)
+      .then(setMyOrders)
+      .catch((err) => console.error('Failed to fetch table orders:', err))
+      .finally(() => setIsFetchingOrders(false))
+  }, [isDrawerOpen, tableId])
 
   const showOrderStatus = !!activeOrder && !isEditing && stage === 'items'
+
+  function updateCardField<K extends keyof CardForm>(key: K, value: CardForm[K]) {
+    setCard((prev) => ({ ...prev, [key]: value }))
+    setCardErrors((prev) => ({ ...prev, [key]: undefined }))
+  }
 
   function resetCheckout() {
     setStage('items')
@@ -69,6 +94,7 @@ export default function OrderDrawer() {
     setCardErrors({})
     setPayError(null)
     setPlacedOrder(null)
+    setStockIssues([])
   }
 
   function handleClose() {
@@ -80,14 +106,15 @@ export default function OrderDrawer() {
     if (items.length === 0) return
     setCheckingStock(true)
     setStockIssues([])
+
     try {
       const result = await checkStock(items.map((i) => ({ menuItemId: i._id, name: i.name, qty: i.qty, price: i.price })))
       if (!result.ok) {
         setStockIssues(
           result.issues.map(
             (issue) =>
-              `${issue.menuItemName}: needs ${issue.needed} ${issue.unit} of ${issue.ingredientName}, only ${issue.available} in stock.`
-          )
+              `${issue.menuItemName}: needs ${issue.needed} ${issue.unit} of ${issue.ingredientName}, only ${issue.available} in stock.`,
+          ),
         )
         return
       }
@@ -124,14 +151,15 @@ export default function OrderDrawer() {
       expiry: validateCardExpiry(card.expiry),
       cvv: validateCVV(card.cvv),
     }
+
     setCardErrors(errors)
-    if (hasErrors(errors)) return
-    validateAndCharge()
+    if (!hasErrors(errors)) validateAndCharge()
   }
 
   async function validateAndCharge() {
     setProcessing(true)
     setPayError(null)
+
     try {
       const payment = await createPayment({
         amount: totalPrice,
@@ -143,8 +171,6 @@ export default function OrderDrawer() {
         setPayError('Payment declined. Please check your card details and try again.')
         return
       }
-      // Card validated & charged successfully — show the check for review
-      // before the order is actually sent through to the kitchen.
       setStage('receipt')
     } catch {
       setPayError('Something went wrong processing your payment. Please try again.')
@@ -218,322 +244,224 @@ export default function OrderDrawer() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-6">
-              {/* --- Tracked order status view (post-checkout) --- */}
-              {showOrderStatus && activeOrder && (
-                <div>
-                  <div className="flex items-center justify-between mb-5">
-                    <span className="text-[11px] uppercase tracking-widest2 text-ember">
-                      {STATUS_LABEL[activeOrder.status]}
-                    </span>
-                    <span className="text-[11px] text-bone-faint">
-                      Updated {new Date(activeOrder.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+              {showOrderStatus ? (
+                <div className="space-y-6">
+                  <div className="border border-white/10 bg-white/5 p-5">
+                    <p className="text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Current status</p>
+                    <p className="font-display text-3xl text-ember">{STATUS_LABEL[activeOrder.status]}</p>
+                    <p className="text-sm text-bone-dim mt-2">Order #{activeOrder._id.slice(-6)}</p>
                   </div>
 
-                  <ul className="space-y-4 mb-6">
-                    {activeOrder.items.map((line) => (
-                      <li key={line.menuItemId} className="flex items-center justify-between text-sm">
+                  <div className="space-y-3">
+                    {activeOrder.items.map((item) => (
+                      <div key={`${item.menuItemId}-${item.name}`} className="flex justify-between gap-4 text-sm">
                         <span className="text-bone-dim">
-                          {line.qty} &times; {line.name}
+                          {item.qty} x {item.name}
                         </span>
-                        <span className="text-bone">${(line.qty * line.price).toFixed(2)}</span>
-                      </li>
+                        <span className="text-bone">{formatMoney(item.qty * item.price)}</span>
+                      </div>
                     ))}
-                  </ul>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-white/10 mb-6">
-                    <span className="text-sm uppercase tracking-widest2 text-bone-dim">Total</span>
-                    <span className="font-display text-xl text-ember">${activeOrder.total.toFixed(2)}</span>
                   </div>
 
-                  <p className="text-xs text-bone-faint mb-6">
-                    Paid via {activeOrder.paymentMethod === 'card' ? 'card' : 'staff at the table'}. Changed your
-                    mind about a dish? You can still edit this order until it&rsquo;s served.
-                  </p>
+                  <div className="divider" />
+                  <div className="flex justify-between">
+                    <span className="text-sm uppercase tracking-widest2 text-bone-dim">Total</span>
+                    <span className="font-display text-2xl text-bone">{formatMoney(activeOrder.total)}</span>
+                  </div>
 
-                  {activeOrder.needsAssistance && (
-                    <p className="text-xs text-ember mb-6 flex items-center gap-2">
-                      <UserRound size={13} /> A team member has been notified and is on the way.
-                    </p>
-                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={startEditing}>
+                      <Pencil size={14} /> Edit
+                    </Button>
+                    <Button variant="ghost" onClick={handleClose}>
+                      Close
+                    </Button>
+                  </div>
 
-                  {activeOrder.note && (
-                    <div className="mb-6 px-4 py-3 border border-ember/30 bg-ember/5">
-                      <p className="text-[10px] uppercase tracking-widest2 text-ember mb-1">
-                        Note from the kitchen
-                      </p>
-                      <p className="text-sm text-bone-dim">{activeOrder.note}</p>
-                    </div>
-                  )}
-
-                  {(activeOrder.status === 'pending' || activeOrder.status === 'preparing') && (
-                    <div className="space-y-3">
-                      <Button variant="outline" className="w-full" onClick={startEditing}>
-                        <Pencil size={13} /> Edit Order
-                      </Button>
-                      <div>
-                        <textarea
-                          value={assistanceNote}
-                          onChange={(e) => setAssistanceNote(e.target.value)}
-                          placeholder="Something wrong? Tell us what's up (optional)…"
-                          rows={2}
-                          className="field resize-none mb-2"
-                        />
-                        <Button
-                          variant="ghost"
-                          className="w-full !border !border-white/15"
-                          onClick={handleAssistanceRequest}
-                          disabled={isRequestingHelp || activeOrder.needsAssistance}
-                        >
-                          <UserRound size={13} />
-                          {activeOrder.needsAssistance
-                            ? 'Help requested'
-                            : isRequestingHelp
-                            ? 'Requesting…'
-                            : 'Request Employee'}
-                        </Button>
+                  <div className="pt-4 border-t border-white/10">
+                    <label className="block text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Need help?</label>
+                    <textarea
+                      className="field resize-none h-24"
+                      value={assistanceNote}
+                      onChange={(event) => setAssistanceNote(event.target.value)}
+                      placeholder="Tell the team what you need"
+                    />
+                    <Button className="w-full mt-3" variant="outline" onClick={handleAssistanceRequest} disabled={isRequestingHelp}>
+                      <UserRound size={14} /> {isRequestingHelp ? 'Sending...' : 'Request employee'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {stage === 'items' && myOrders.length > 0 && (
+                    <div className="mb-8">
+                      <h4 className="text-[11px] uppercase tracking-widest2 text-bone-dim mb-4">
+                        {isFetchingOrders ? 'Loading table orders' : `Table ${tableId || 'orders'}`}
+                      </h4>
+                      <div className="space-y-3">
+                        {myOrders.map((order) => (
+                          <div key={order._id} className="p-4 border border-white/10 bg-white/5 flex justify-between items-center">
+                            <div>
+                              <p className="text-sm font-medium text-bone">Order #{order._id.slice(-4)}</p>
+                              <p className="text-xs text-bone-faint mt-1">{STATUS_LABEL[order.status] || order.status}</p>
+                            </div>
+                            <span className="text-sm font-display text-ember">{formatMoney(order.total)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* --- Cart / checkout flow --- */}
-              {!showOrderStatus && stage === 'items' && (
-                <>
-                  {isEditing && (
-                    <button
-                      onClick={cancelEditing}
-                      className="text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone mb-5"
-                    >
-                      &larr; Cancel editing
-                    </button>
-                  )}
-                  {items.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center gap-3 py-20">
-                      <p className="font-display italic text-xl text-bone-dim">Your table is empty.</p>
-                      <p className="text-sm text-bone-faint max-w-[220px]">
-                        Add a dish from the tasting menu to begin your order.
-                      </p>
-                    </div>
-                  ) : (
-                    <ul className="space-y-6">
-                      {items.map((item) => (
-                        <li key={item._id} className="flex gap-4 pb-6 border-b border-white/5">
-                          <div className="flex-1">
-                            <p className="font-display text-base">{item.name}</p>
-                            <p className="text-ember text-sm mt-1">${item.price}</p>
-                            <div className="flex items-center gap-3 mt-3">
-                              <button
-                                onClick={() => updateQty(item._id, item.qty - 1)}
-                                className="w-7 h-7 flex items-center justify-center border border-white/20 hover:border-ember"
-                                aria-label={`Decrease ${item.name} quantity`}
-                              >
-                                <Minus size={12} />
-                              </button>
-                              <span className="text-sm w-4 text-center">{item.qty}</span>
-                              <button
-                                onClick={() => updateQty(item._id, item.qty + 1)}
-                                className="w-7 h-7 flex items-center justify-center border border-white/20 hover:border-ember"
-                                aria-label={`Increase ${item.name} quantity`}
-                              >
-                                <Plus size={12} />
-                              </button>
-                              <button
-                                onClick={() => removeItem(item._id)}
-                                className="ml-auto text-bone-faint hover:text-ember"
-                                aria-label={`Remove ${item.name}`}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                  {stage === 'items' && (
+                    <div className="space-y-5">
+                      {items.length === 0 ? (
+                        <p className="text-sm text-bone-dim">Your cart is empty.</p>
+                      ) : (
+                        items.map((item) => (
+                          <div key={item._id} className="flex gap-4 border-b border-white/10 pb-5">
+                            {item.image && (
+                              <img src={item.image} alt="" className="h-20 w-20 object-cover bg-noir-850" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between gap-3">
+                                <p className="text-sm text-bone leading-snug">{item.name}</p>
+                                <button onClick={() => removeItem(item._id)} aria-label={`Remove ${item.name}`} className="text-bone-faint hover:text-red-400">
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                              <p className="text-xs text-bone-faint mt-1">{formatMoney(item.price)}</p>
+                              <div className="flex items-center justify-between mt-4">
+                                <div className="flex items-center border border-white/15">
+                                  <button className="p-2 text-bone-dim hover:text-bone" onClick={() => updateQty(item._id, item.qty - 1)} aria-label={`Decrease ${item.name}`}>
+                                    <Minus size={14} />
+                                  </button>
+                                  <span className="w-9 text-center text-sm">{item.qty}</span>
+                                  <button className="p-2 text-bone-dim hover:text-bone" onClick={() => updateQty(item._id, item.qty + 1)} aria-label={`Increase ${item.name}`}>
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                                <span className="text-sm text-bone">{formatMoney(item.qty * item.price)}</span>
+                              </div>
                             </div>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
+                        ))
+                      )}
+
+                      {stockIssues.length > 0 && (
+                        <div className="border border-red-500/30 bg-red-500/10 p-4 space-y-2">
+                          {stockIssues.map((issue) => (
+                            <p key={issue} className="text-xs text-red-200 leading-relaxed">{issue}</p>
+                          ))}
+                        </div>
+                      )}
+
+                      {isEditing && (
+                        <Button variant="ghost" className="w-full" onClick={cancelEditing}>
+                          Cancel edit
+                        </Button>
+                      )}
+                    </div>
                   )}
 
-                  {stockIssues.length > 0 && (
-                    <div className="mt-6 border border-ember/40 bg-ember/5 p-4">
-                      <p className="text-xs uppercase tracking-widest2 text-ember mb-2">
-                        Insufficient Ingredients
+                  {stage === 'method' && (
+                    <div className="space-y-4">
+                      <button
+                        className="w-full border border-white/15 hover:border-ember p-5 text-left transition-colors"
+                        onClick={() => setStage('card')}
+                      >
+                        <span className="flex items-center gap-3 text-bone">
+                          <CreditCard size={18} /> Pay by card
+                        </span>
+                        <span className="block text-xs text-bone-faint mt-2">Complete payment now and send the order to the kitchen.</span>
+                      </button>
+                      <button
+                        className="w-full border border-white/15 hover:border-ember p-5 text-left transition-colors"
+                        onClick={handleStaffAssisted}
+                        disabled={isProcessing}
+                      >
+                        <span className="flex items-center gap-3 text-bone">
+                          <UserRound size={18} /> Pay at table
+                        </span>
+                        <span className="block text-xs text-bone-faint mt-2">Ask an employee to bring the check.</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {stage === 'card' && (
+                    <div className="space-y-4">
+                      <TextInput label="Name on card" value={card.cardName} onChange={(e) => updateCardField('cardName', e.target.value)} error={cardErrors.cardName} />
+                      <TextInput label="Card number" inputMode="numeric" value={card.cardNumber} onChange={(e) => updateCardField('cardNumber', e.target.value)} error={cardErrors.cardNumber} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <TextInput label="Expiry" placeholder="MM/YY" value={card.expiry} onChange={(e) => updateCardField('expiry', e.target.value)} error={cardErrors.expiry} />
+                        <TextInput label="CVV" inputMode="numeric" value={card.cvv} onChange={(e) => updateCardField('cvv', e.target.value)} error={cardErrors.cvv} />
+                      </div>
+                      {payError && <p className="text-sm text-red-300">{payError}</p>}
+                      <p className="flex items-center gap-2 text-[11px] text-bone-faint">
+                        <Lock size={13} /> Payment is simulated for this demo.
                       </p>
-                      <ul className="space-y-1">
-                        {stockIssues.map((msg) => (
-                          <li key={msg} className="text-xs text-bone-dim">
-                            {msg}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-xs text-bone-faint mt-2">
-                        Please adjust the quantity or remove this dish to continue.
+                    </div>
+                  )}
+
+                  {stage === 'receipt' && (
+                    <div className="space-y-5">
+                      <div className="border border-white/10 bg-white/5 p-5">
+                        <p className="text-[11px] uppercase tracking-widest2 text-bone-faint">Payment approved</p>
+                        <p className="font-display text-3xl text-ember mt-2">{formatMoney(totalPrice)}</p>
+                      </div>
+                      <p className="text-sm text-bone-dim leading-relaxed">Confirm to send this order to the kitchen, or call an employee if something on the check looks wrong.</p>
+                    </div>
+                  )}
+
+                  {stage === 'placed' && (
+                    <div className="min-h-[55vh] flex flex-col items-center justify-center text-center">
+                      <CheckCircle2 size={46} className="text-ember mb-5" />
+                      <p className="font-display italic text-3xl text-bone">Order placed</p>
+                      <p className="text-sm text-bone-dim mt-3">
+                        {placedOrder ? `Order #${placedOrder._id.slice(-6)} is now with the team.` : 'Your order is now with the team.'}
                       </p>
                     </div>
                   )}
                 </>
               )}
-
-              {!showOrderStatus && stage === 'method' && (
-                <div>
-                  <p className="text-sm text-bone-dim mb-6">How would you like to settle this order?</p>
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => setStage('card')}
-                      className="w-full flex items-center gap-4 border border-white/15 hover:border-ember p-5 text-left transition-colors"
-                    >
-                      <CreditCard size={20} className="text-ember shrink-0" />
-                      <div>
-                        <p className="text-sm text-bone">Pay by Card</p>
-                        <p className="text-xs text-bone-faint mt-0.5">Charged now, review your check before it's sent.</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handleStaffAssisted}
-                      disabled={isProcessing}
-                      className="w-full flex items-center gap-4 border border-white/15 hover:border-ember p-5 text-left transition-colors disabled:opacity-50"
-                    >
-                      <UserRound size={20} className="text-ember shrink-0" />
-                      <div>
-                        <p className="text-sm text-bone">Request Employee</p>
-                        <p className="text-xs text-bone-faint mt-0.5">
-                          {isProcessing ? 'Sending your order…' : 'Pay at the table — we\u2019ll bring the check.'}
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setStage('items')}
-                    className="text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone mt-6"
-                  >
-                    &larr; Back to order
-                  </button>
-                </div>
-              )}
-
-              {!showOrderStatus && stage === 'card' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6 px-4 py-3 bg-noir-850 border border-white/10">
-                    <span className="text-sm text-bone-dim">Amount due</span>
-                    <span className="font-display text-xl text-ember">${totalPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="grid gap-5">
-                    <TextInput
-                      label="Name on Card"
-                      value={card.cardName}
-                      onChange={(e) => setCard((p) => ({ ...p, cardName: e.target.value }))}
-                      error={cardErrors.cardName}
-                      placeholder="As it appears on the card"
-                    />
-                    <TextInput
-                      label="Card Number"
-                      value={card.cardNumber}
-                      onChange={(e) => setCard((p) => ({ ...p, cardNumber: e.target.value }))}
-                      error={cardErrors.cardNumber}
-                      placeholder="4242 4242 4242 4242"
-                      inputMode="numeric"
-                    />
-                    <div className="grid grid-cols-2 gap-5">
-                      <TextInput
-                        label="Expiry"
-                        value={card.expiry}
-                        onChange={(e) => setCard((p) => ({ ...p, expiry: e.target.value }))}
-                        error={cardErrors.expiry}
-                        placeholder="MM/YY"
-                      />
-                      <TextInput
-                        label="CVV"
-                        value={card.cvv}
-                        onChange={(e) => setCard((p) => ({ ...p, cvv: e.target.value }))}
-                        error={cardErrors.cvv}
-                        placeholder="123"
-                        inputMode="numeric"
-                      />
-                    </div>
-                  </div>
-                  {payError && <p className="text-sm text-ember mt-4">{payError}</p>}
-                  <div className="flex items-center justify-between mt-7">
-                    <button
-                      onClick={() => setStage('method')}
-                      className="text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone"
-                    >
-                      &larr; Back
-                    </button>
-                    <Button onClick={handleCardContinue} disabled={isProcessing}>
-                      <Lock size={12} />
-                      {isProcessing ? 'Validating…' : 'Validate & Pay'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!showOrderStatus && stage === 'receipt' && (
-                <div>
-                  <div className="flex items-center gap-2 text-ember text-sm mb-6">
-                    <CheckCircle2 size={16} /> Payment successful — here's your check.
-                  </div>
-                  <div className="border border-white/10 p-5 mb-6">
-                    <ul className="space-y-3">
-                      {items.map((item) => (
-                        <li key={item._id} className="flex items-center justify-between text-sm">
-                          <span className="text-bone-dim">
-                            {item.qty} &times; {item.name}
-                          </span>
-                          <span className="text-bone">${(item.qty * item.price).toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/10">
-                      <span className="text-sm uppercase tracking-widest2 text-bone-dim">Total Charged</span>
-                      <span className="font-display text-xl text-ember">${totalPrice.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-bone-faint mb-6">
-                    Everything look right? Confirm to send this to the kitchen, or request a team member if
-                    something on the check needs fixing.
-                  </p>
-                  <div className="space-y-3">
-                    <Button className="w-full" onClick={handleConfirmPayment} disabled={isProcessing}>
-                      {isProcessing ? 'Sending…' : 'Confirm & Send to Kitchen'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleRequestEmployeeFromReceipt}
-                      disabled={isProcessing}
-                    >
-                      <UserRound size={13} /> Something's Wrong — Request Employee
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!showOrderStatus && stage === 'placed' && placedOrder && (
-                <div className="text-center py-10">
-                  <CheckCircle2 className="mx-auto text-ember mb-5" size={40} />
-                  <p className="font-display italic text-2xl mb-2">
-                    {placedOrder.needsAssistance ? "We're on our way." : 'Sent to the kitchen.'}
-                  </p>
-                  <p className="text-bone-dim text-sm max-w-xs mx-auto">
-                    {placedOrder.needsAssistance
-                      ? 'A team member will be with you shortly to sort out payment.'
-                      : `Your order is in the queue. Total: $${placedOrder.total.toFixed(2)}.`}
-                  </p>
-                  <Button className="mt-8" onClick={handleClose}>
-                    Done
-                  </Button>
-                </div>
-              )}
             </div>
 
-            {!showOrderStatus && stage === 'items' && items.length > 0 && (
-              <div className="px-6 py-6 border-t border-white/10">
-                <div className="flex items-center justify-between mb-5">
+            {!showOrderStatus && stage !== 'placed' && (
+              <div className="border-t border-white/10 p-6 bg-noir-950">
+                <div className="flex justify-between items-center mb-5">
                   <span className="text-sm uppercase tracking-widest2 text-bone-dim">Total</span>
-                  <span className="font-display text-2xl text-ember">${totalPrice.toFixed(2)}</span>
+                  <span className="font-display text-2xl text-bone">{formatMoney(totalPrice)}</span>
                 </div>
-                <Button className="w-full" onClick={goToCheckout} disabled={isCheckingStock}>
-                  {isCheckingStock ? 'Checking availability…' : isEditing ? 'Review & Resubmit' : 'Checkout'}
-                </Button>
+
+                {stage === 'items' && (
+                  <Button className="w-full" onClick={goToCheckout} disabled={items.length === 0 || isCheckingStock}>
+                    {isCheckingStock ? 'Checking stock...' : isEditing ? 'Update order' : 'Checkout'}
+                  </Button>
+                )}
+                {stage === 'method' && (
+                  <Button className="w-full" variant="ghost" onClick={() => setStage('items')} disabled={isProcessing}>
+                    Back to cart
+                  </Button>
+                )}
+                {stage === 'card' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="ghost" onClick={() => setStage('method')} disabled={isProcessing}>
+                      Back
+                    </Button>
+                    <Button onClick={handleCardContinue} disabled={isProcessing}>
+                      {isProcessing ? 'Processing...' : 'Pay'}
+                    </Button>
+                  </div>
+                )}
+                {stage === 'receipt' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={handleRequestEmployeeFromReceipt} disabled={isProcessing}>
+                      Need help
+                    </Button>
+                    <Button onClick={handleConfirmPayment} disabled={isProcessing}>
+                      Confirm
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </motion.aside>

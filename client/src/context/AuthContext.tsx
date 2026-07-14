@@ -1,17 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { AuthUser, LoginPayload, SignupPayload } from '../types'
 import * as api from '../services/api'
-
-interface AuthContextValue {
-  user: AuthUser | null
-  isLoading: boolean
-  login: (payload: LoginPayload) => Promise<AuthUser>
-  signup: (payload: SignupPayload) => Promise<AuthUser>
-  continueAsGuest: () => AuthUser
-  logout: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
+import { AuthContext } from './authContextValue'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -21,6 +11,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function checkAuth() {
       try {
+        const savedGuest = sessionStorage.getItem('guest_user')
+        if (savedGuest) {
+          setUser(JSON.parse(savedGuest))
+          setLoading(false)
+          return
+        }
+
         const result = await api.getCurrentUser()
 
         setUser({
@@ -41,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
 
     try {
+      sessionStorage.removeItem('guest_user')
       const result = await api.login(payload)
 
       const loggedUser = {
@@ -60,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
 
     try {
+      sessionStorage.removeItem('guest_user')
       const result = await api.signup(payload)
 
       const newUser = {
@@ -83,13 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: 'customer',
     }
 
+    sessionStorage.setItem('guest_user', JSON.stringify(guest))
     setUser(guest)
+    api.logout().catch((err) => console.error('Failed to clear customer cookie:', err))
 
     return guest
   }
 
   async function logout() {
     await api.logout()
+    sessionStorage.removeItem('guest_user')
     setUser(null)
   }
 
@@ -109,12 +111,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext)
-
-  if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
-
-  return ctx
-}
+export { useAuth } from './authContextValue'

@@ -1,43 +1,19 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { CartItem, MenuItem, OrderRecord, PaymentMethod, OrderPaymentStatus } from '../types'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { BackendOrderItemPayload, CartItem, MenuItem, OrderItemPayload, OrderRecord } from '../types'
 import * as api from '../services/api'
-
-interface SubmitOptions {
-  paymentMethod: PaymentMethod
-  paymentStatus: OrderPaymentStatus
-  needsAssistance?: boolean
-}
-
-interface CartContextValue {
-  items: CartItem[]
-  addItem: (item: MenuItem) => void
-  removeItem: (id: string) => void
-  updateQty: (id: string, qty: number) => void
-  clearCart: () => void
-  totalCount: number
-  totalPrice: number
-  isDrawerOpen: boolean
-  openDrawer: () => void
-  closeDrawer: () => void
-  toggleDrawer: () => void
-  activeOrder: OrderRecord | null
-  isEditing: boolean
-  startEditing: () => void
-  cancelEditing: () => void
-  submitOrder: (options: SubmitOptions) => Promise<OrderRecord>
-  requestAssistanceForActiveOrder: (reason: string) => Promise<void>
-  refreshActiveOrder: () => Promise<void>
-}
-
-const CartContext = createContext<CartContextValue | null>(null)
+import { getCurrentTableId } from '../utils/session'
+import { useAuth } from './authContextValue'
+import { CartContext, type CartContextValue, type SubmitOptions } from './cartContextValue'
 const CART_STORAGE_KEY = 'noir_sel_cart'
-const ACTIVE_ORDER_ID_KEY = 'noir_sel_active_order_id'
+const ACTIVE_ORDER_ID_PREFIX = 'noir_sel_active_order_id'
+const ACTIVE_STATUSES: OrderRecord['status'][] = ['pending', 'preparing', 'ready', 'served']
 
 function toCartItem(menuItem: MenuItem): CartItem {
   return { _id: menuItem._id, name: menuItem.name, price: menuItem.price, qty: 1, image: menuItem.image }
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY)
@@ -49,27 +25,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isDrawerOpen, setDrawerOpen] = useState(false)
   const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const activeOrderStorageKey = useMemo(() => {
+    const tableId = getCurrentTableId() || 'table-unknown'
+    const ownerId = user?._id || 'guest'
+    return `${ACTIVE_ORDER_ID_PREFIX}:${tableId}:${ownerId}`
+  }, [user?._id])
 
   useEffect(() => {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items))
   }, [items])
 
-  // Reload the guest's in-flight order on mount (e.g. after a page refresh)
   useEffect(() => {
-    const savedId = localStorage.getItem(ACTIVE_ORDER_ID_KEY)
-    if (!savedId) return
-    api.fetchOrder(savedId).then((order) => {
-      if (!order) {
-        localStorage.removeItem(ACTIVE_ORDER_ID_KEY)
-        return
-      }
-      if (order.status === 'completed' || order.status === 'cancelled') {
-        localStorage.removeItem(ACTIVE_ORDER_ID_KEY)
-        return
-      }
-      setActiveOrder(order)
-    })
-  }, [])
+    refreshActiveOrder()
+  }, [activeOrderStorageKey])
 
   function addItem(menuItem: MenuItem) {
     setItems((prev) => {
@@ -97,7 +65,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   function startEditing() {
     if (!activeOrder) return
     setItems(
-      activeOrder.items.map((i) => ({ _id: i.menuItemId, name: i.name, price: i.price, qty: i.qty }))
+      activeOrder.items.map((i) => ({
+        _id: i.menuItemId,
+        name: i.name,
+        price: i.price,
+        qty: i.qty,
+      })),
     )
     setIsEditing(true)
   }
@@ -109,32 +82,49 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   async function submitOrder(options: SubmitOptions): Promise<OrderRecord> {
     const total = items.reduce((sum, i) => sum + i.qty * i.price, 0)
-    const orderItems = items.map((i) => ({ menuItemId: i._id, name: i.name, qty: i.qty, price: i.price }))
+    const orderItems: OrderItemPayload[] = items.map((i) => ({
+      menuItemId: i._id,
+      name: i.name,
+      qty: i.qty,
+      price: i.price,
+    }))
+    const backendOrderItems: BackendOrderItemPayload[] = orderItems.map((i) => ({
+      menuItemId: i.menuItemId,
+      name: i.name,
+      quantity: i.qty,
+      unitPrice: i.price,
+      specialInstructions: '',
+    }))
+    const tableId = getCurrentTableId() || activeOrder?.tableId || 1
+    const tableNumber = Number(tableId) || activeOrder?.tableNumber || 1
+    const customerId = user?.role === 'customer' ? user._id : undefined
+    const userId = user && user.role !== 'customer' ? user._id : undefined
 
     let order: OrderRecord
     if (isEditing && activeOrder) {
       order = await api.updateOrder(activeOrder._id, {
-        items: orderItems,
-        total,
-        paymentMethod: options.paymentMethod,
-        paymentStatus: options.paymentStatus,
+        items: backendOrderItems,
+        totalAmount: total,
+        paymentStatus: options.paymentStatus === 'paid' ? 'Paid' : 'Pending',
         needsAssistance: options.needsAssistance ?? false,
-        status: 'pending',
+        status: 'Pending',
       })
     } else {
       order = await api.createOrder({
-        tableId: 'table-01',
-        tableNumber: 1,
+        tableId,
+        tableNumber,
         items: orderItems,
-        total,
+        totalAmount: total,
         paymentMethod: options.paymentMethod,
         paymentStatus: options.paymentStatus,
         needsAssistance: options.needsAssistance,
+        customerId,
+        userId,
       })
     }
 
     setActiveOrder(order)
-    localStorage.setItem(ACTIVE_ORDER_ID_KEY, order._id)
+    localStorage.setItem(activeOrderStorageKey, order._id)
     setItems([])
     setIsEditing(false)
     return order
@@ -147,14 +137,44 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshActiveOrder() {
-    const savedId = localStorage.getItem(ACTIVE_ORDER_ID_KEY)
-    if (!savedId) return
-    const order = await api.fetchOrder(savedId)
-    if (!order || order.status === 'completed' || order.status === 'cancelled') {
-      localStorage.removeItem(ACTIVE_ORDER_ID_KEY)
+    const tableId = getCurrentTableId()
+    const isUserGuest = !user || user._id.startsWith('guest-')
+
+    if (tableId) {
+      const tableOrders = await api.fetchTableOrders(tableId)
+      const tableOrder = tableOrders.find((order) => {
+        if (!ACTIVE_STATUSES.includes(order.status)) return false
+        const isOrderGuest = !order.customerId
+        return isUserGuest ? isOrderGuest : !isOrderGuest
+      })
+
+      if (tableOrder) {
+        setActiveOrder(tableOrder)
+        localStorage.setItem(activeOrderStorageKey, tableOrder._id)
+        return
+      }
+    }
+
+    const savedId = localStorage.getItem(activeOrderStorageKey)
+    if (!savedId) {
       setActiveOrder(null)
       return
     }
+
+    const order = await api.fetchOrder(savedId)
+    if (!order || !ACTIVE_STATUSES.includes(order.status)) {
+      localStorage.removeItem(activeOrderStorageKey)
+      setActiveOrder(null)
+      return
+    }
+
+    const isOrderGuest = !order.customerId
+    if (isUserGuest !== isOrderGuest) {
+      localStorage.removeItem(activeOrderStorageKey)
+      setActiveOrder(null)
+      return
+    }
+
     setActiveOrder(order)
   }
 
@@ -186,10 +206,4 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
-}
-
-export function useCart(): CartContextValue {
-  const ctx = useContext(CartContext)
-  if (!ctx) throw new Error('useCart must be used within a CartProvider')
-  return ctx
 }

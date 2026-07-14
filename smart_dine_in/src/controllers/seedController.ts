@@ -6,6 +6,9 @@ import { Ingredient } from "../models/Ingredient";
 import { Notification } from "../models/Notification";
 import { Payment } from "../models/Payment";
 import { Reservation } from '../models/Reservation';
+import { MenuCategory } from '../models/MenuCategory';
+import { MenuItem } from '../models/MenuItem';
+import { Table } from '../models/Table';
 export const seedDatabase = async (
   req: Request,
   res: Response,
@@ -47,6 +50,32 @@ export const seedDatabase = async (
       targetRole: "All",
     });
 
+    // Ensure at least one menu category, menu item and table exist so orders can be created
+    const defaultCategory =
+      (await MenuCategory.findOne({ name: 'Main' })) ||
+      (await MenuCategory.create({ name: 'Main' }));
+
+    const defaultIngredient =
+      (await Ingredient.findOne({ name: 'Premium Coffee Beans' })) ||
+      (await Ingredient.create({ name: 'Premium Coffee Beans', quantityInStock: 100, unit: 'kg', reorderThreshold: 5 }));
+
+    const defaultMenuItem =
+      (await MenuItem.findOne({ name: 'House Coffee' })) ||
+      (await MenuItem.create({
+        categoryId: defaultCategory._id,
+        name: 'House Coffee',
+        description: 'Freshly brewed house blend',
+        price: 4.5,
+        imageUrl: 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&q=80',
+        isAvailable: true,
+        preparationTime: 5,
+        recipe: [{ ingredientId: defaultIngredient._id, quantityRequired: 0.05 }],
+      }));
+
+    const defaultTable =
+      (await Table.findOne({ tableNumber: 1 })) ||
+      (await Table.create({ tableNumber: 1, capacity: 4, status: 'Available' }));
+
     let testPayment = null;
     if (order) {
       testPayment = await Payment.create({
@@ -70,5 +99,19 @@ export const seedDatabase = async (
   } catch (error) {
     console.error("❌ Error seeding database:", error);
     return res.status(500).json({ error: "Failed to seed database" });
+  }
+};
+// POST /api/seed/restock
+// Tops up ALL ingredient stocks to 999 so ordering never fails due to depleted stock.
+export const restockAll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await Ingredient.updateMany({}, { $set: { quantityInStock: 999 } });
+    res.status(200).json({
+      message: `Restocked ${result.modifiedCount} ingredient(s) to 999 units each.`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error('❌ restockAll error:', error);
+    res.status(500).json({ error: (error as Error).message });
   }
 };

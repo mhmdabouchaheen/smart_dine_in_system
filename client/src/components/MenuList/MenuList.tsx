@@ -1,5 +1,5 @@
 import { Flame, Leaf } from 'lucide-react'
-import { useCart } from '../../context/CartContext'
+import { useCart } from '../../context/cartContextValue'
 import type { MenuItem } from '../../types'
 
 interface MenuListProps {

@@ -76,8 +76,25 @@ function writeAll(orders: OrderRecord[]): void {
   writeList<OrderRecord>(KEY, orders)
 }
 
-export function listOrders(): OrderRecord[] {
-  return readAll()
+export function listOrders(tableId?: string): OrderRecord[] {
+  const allOrders = readAll()
+
+  if (!tableId) return allOrders
+
+  const tableNumber = Number(tableId)
+
+  return allOrders.filter((order) => {
+    if (order.tableId === tableId) return true
+    if (!Number.isNaN(tableNumber) && order.tableNumber === tableNumber) return true
+    return order.tableId === `table-${String(tableNumber).padStart(2, '0')}`
+  })
+}
+
+export function getActiveTableOrder(tableId: string | number): OrderRecord | undefined {
+  const activeStatuses: OrderRecord['status'][] = ['pending', 'preparing', 'ready', 'served']
+  return listOrders(String(tableId))
+    .filter((order) => activeStatuses.includes(order.status))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0]
 }
 
 export function getOrder(id: string): OrderRecord | undefined {

@@ -36,7 +36,7 @@ export const generateQRCode = async (
     }
 
     const baseUrl =
-      process.env.FRONTEND_URL || 'http://localhost:5174'
+      process.env.FRONTEND_URL || 'http://localhost:5173'
 
     const frontendMenuUrl =
       `${baseUrl}/menu?tableId=${tableId}`

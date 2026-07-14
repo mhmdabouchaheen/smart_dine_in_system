@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { UserRound, LogIn } from 'lucide-react'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../context/authContextValue'
 import { TextInput } from '../../components/ui/FormField'
 import Button from '../../components/ui/Button'
 import { validateEmail, hasErrors, type FieldErrors } from '../../utils/validation'
