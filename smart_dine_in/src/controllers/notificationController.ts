@@ -1,4 +1,4 @@
-import { Response } from 'express'
+import { Request, Response } from 'express'
 import { Types } from 'mongoose'
 
 import {
@@ -97,6 +97,54 @@ function formatNotification(
       notification,
       userId,
     ),
+  }
+}
+
+// Public endpoint for guest submissions (no auth required).
+export const createPublicNotification = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { message, type = 'General', recipientRole, recipientId } = req.body
+
+    if (typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: 'Notification message is required' })
+      return
+    }
+
+    if (!ALLOWED_TYPES.includes(type as NotificationType)) {
+      res.status(400).json({ error: 'Invalid notification type' })
+      return
+    }
+
+    if (!ALLOWED_ROLES.includes(recipientRole as NotificationRole)) {
+      res.status(400).json({ error: 'Invalid recipient role' })
+      return
+    }
+
+    const notification = await Notification.create({
+      message: message.trim(),
+      type: type as NotificationType,
+      // Use a generated ObjectId for guest sender (no real account).
+      senderId: new Types.ObjectId(),
+      senderModel: 'Customer',
+      senderRole: 'Customer',
+      recipientRole: recipientRole as NotificationRole,
+      recipientId: recipientId ? new Types.ObjectId(recipientId) : undefined,
+      recipientModel: recipientId ? 'Customer' : undefined,
+      readBy: [],
+    })
+
+    const populated = await notification.populate('senderId', 'name email role')
+
+    res.status(201).json({
+      ...populated.toObject(),
+      isRead: false,
+    })
+  } catch (error) {
+    console.error('Failed to create public notification:', error)
+    res.status(500).json({ error: 'Failed to create public notification' })
   }
 }
 

@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import {
   createNotification,
+  createPublicNotification,
   deleteNotification,
   getMyNotifications,
   markAllNotificationsRead,
@@ -10,6 +11,10 @@ import {
 import { authMiddleware } from '../middlewares/authMiddleware'
 
 const router = Router()
+
+// Public endpoint for unauthenticated (guest) submissions.
+// Placed before auth middleware so guests may post without a JWT cookie.
+router.post('/public', createPublicNotification)
 
 router.use(authMiddleware)
 
