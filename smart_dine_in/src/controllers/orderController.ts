@@ -2,10 +2,18 @@ import { Request, Response } from 'express';
 import { Order } from '../models/Order';
 import { MenuItem } from '../models/MenuItem';
 import { Table } from '../models/Table';
+import { Reservation } from '../models/Reservation';
 
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const { tableId, items, customerId, userId, reservationId } = req.body;
+    if (reservationId) {
+      const reservation = await Reservation.findOne({ _id: reservationId, tableId });
+      if (!reservation) {
+        res.status(400).json({ error: 'Reservation does not belong to this table.' });
+        return;
+      }
+    }
     let calculatedTotal = 0;
     const processedItems = [];
 
@@ -37,6 +45,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     } as any); // Bypass overload check
 
     await Table.findByIdAndUpdate(tableId, { status: 'Occupied' });
+    if (reservationId) await Reservation.findByIdAndUpdate(reservationId, { status: 'Seated' });
     res.status(201).json(newOrder);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

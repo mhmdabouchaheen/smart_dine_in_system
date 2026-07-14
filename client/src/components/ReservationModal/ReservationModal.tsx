@@ -4,7 +4,7 @@ import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import { TextInput, TextArea, Select } from '../ui/FormField'
 import type { TableEntity, ReservationRecord } from '../../types'
-import { createPayment, createReservation } from '../../services/api'
+import { createPayment, createReservation, fetchReservationAvailability } from '../../services/api'
 import {
   validateName,
   validateEmail,
@@ -66,6 +66,8 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
   const [cardErrors, setCardErrors] = useState<FieldErrors<keyof CardForm>>({})
   const [isProcessing, setProcessing] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
+  const [availableTimes, setAvailableTimes] = useState<string[]>([])
+  const [isLoadingTimes, setLoadingTimes] = useState(false)
 
   if (!table) return null
 
@@ -82,7 +84,23 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
     setCard(initialCard)
     setCardErrors({})
     setPayError(null)
+    setAvailableTimes([])
     onClose()
+  }
+
+  async function loadAvailableTimes(date: string) {
+    updateDetails('date', date)
+    updateDetails('time', '')
+    if (!date) return setAvailableTimes([])
+    setLoadingTimes(true)
+    try {
+      const slots = await fetchReservationAvailability(table!._id, date)
+      setAvailableTimes(slots.filter((slot) => slot.available).map((slot) => slot.time))
+    } catch {
+      setAvailableTimes([])
+    } finally {
+      setLoadingTimes(false)
+    }
   }
 
   function handleDetailsSubmit() {
@@ -198,16 +216,13 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
             label="Date"
             type="date"
             value={details.date}
-            onChange={(e) => updateDetails('date', e.target.value)}
+            onChange={(e) => loadAvailableTimes(e.target.value)}
             error={detailErrors.date}
           />
-          <TextInput
-            label="Time"
-            type="time"
-            value={details.time}
-            onChange={(e) => updateDetails('time', e.target.value)}
-            error={detailErrors.time}
-          />
+          <Select label="Available Time" value={details.time} onChange={(e) => updateDetails('time', e.target.value)} error={detailErrors.time} disabled={!details.date || isLoadingTimes}>
+            <option value="">{isLoadingTimes ? 'Loading times…' : details.date ? 'Choose a time' : 'Choose a date first'}</option>
+            {availableTimes.map((time) => <option key={time} value={time}>{time}</option>)}
+          </Select>
           <TextArea
             label="Notes"
             full

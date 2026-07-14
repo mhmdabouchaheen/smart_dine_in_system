@@ -116,6 +116,7 @@ export interface CreateOrderPayload {
   paymentMethod: PaymentMethod
   paymentStatus: OrderPaymentStatus
   needsAssistance?: boolean
+  reservationId?: string
 }
 
 export interface OrderRecord {

@@ -471,6 +471,11 @@ export async function fetchQRCodes(): Promise<QRCodeRecord[]> {
   }
 }
 
+export async function checkInTable(tableId: string): Promise<TableEntity> {
+  const { data } = await apiClient.patch<any>(`/tables/${tableId}/check-in`)
+  return { ...data, zone: data.zone || 'Dining Room', status: normalizeTableStatus(data.status) }
+}
+
 // --- Orders ---------------------------------------------------------------
 export async function fetchOrders(): Promise<OrderRecord[]> {
   try {
@@ -500,6 +505,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderRec
         specialInstructions: '',
       })),
       customerId: payload.tableId,
+      reservationId: payload.reservationId,
     })
     return normalizeOrderRecord(data)
   } catch {
@@ -663,6 +669,13 @@ export async function deleteNotification(
 
 
 // --- Reservations -----------------------------------------------------
+export async function fetchReservationAvailability(
+  tableId: string,
+  date: string,
+): Promise<{ time: string; available: boolean }[]> {
+  const { data } = await apiClient.get<{ time: string; available: boolean }[]>('/reservations/availability', { params: { tableId, date } })
+  return data
+}
 export async function fetchReservations(): Promise<ReservationRecord[]> {
   try {
     const { data } = await apiClient.get<any[]>('/reservations')
@@ -686,6 +699,8 @@ export async function createReservation(
       dateTime: new Date(`${payload.date}T${payload.time}`).toISOString(),
       partySize: payload.partySize,
       notes: payload.notes || '',
+      depositAmount: payload.depositAmount,
+      paymentId: payload.paymentId,
     })
     return normalizeReservationRecord(data)
   } catch {

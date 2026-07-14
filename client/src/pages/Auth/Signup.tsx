@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { TextInput } from '../../components/ui/FormField'
 import Button from '../../components/ui/Button'
+import { checkInTable } from '../../services/api'
 import {
   validateName,
   validateEmail,
@@ -26,6 +27,7 @@ const initialForm: FormState = { name: '', email: '', phone: '', password: '', c
 export default function Signup() {
   const { signup, isLoading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState<FormState>(initialForm)
   const [errors, setErrors] = useState<FieldErrors<keyof FormState>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -49,7 +51,14 @@ export default function Signup() {
     try {
       setFormError(null)
       await signup(form)
-      navigate('/')
+      const tableId = searchParams.get('tableId')
+      const tableNumber = searchParams.get('tableNumber') || ''
+      if (tableId) {
+        await checkInTable(tableId)
+        navigate(`/menu?tableId=${encodeURIComponent(tableId)}&tableNumber=${encodeURIComponent(tableNumber)}`)
+      } else {
+        navigate('/')
+      }
     } catch {
       setFormError('Could not create your account. Please try again.')
     }
@@ -113,7 +122,7 @@ export default function Signup() {
 
       <p className="text-sm text-bone-dim mt-8">
         Already have an account?{' '}
-        <Link to="/login" className="text-ember hover:underline">
+        <Link to={`/login${searchParams.toString() ? `?${searchParams.toString()}` : ''}`} className="text-ember hover:underline">
           Sign in
         </Link>
       </p>

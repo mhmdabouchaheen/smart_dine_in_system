@@ -12,6 +12,7 @@ import ingredientRoutes from './routes/ingredientRoutes'
 import authRoutes from './routes/authRoutes'
 import customerRoutes from './routes/customerRoutes'
 import notificationRoutes from './routes/notificationRoutes'
+import paymentRoutes from './routes/paymentRoutes'
 const app = express()
 
 app.use(
@@ -46,5 +47,6 @@ app.use('/api/seed', seedRoutes)
 app.use('/api/inventory', ingredientRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/customers', customerRoutes);
+app.use('/api/payments', paymentRoutes);
 
 export default app

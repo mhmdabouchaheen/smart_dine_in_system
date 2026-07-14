@@ -44,9 +44,6 @@ export default function Reservation() {
   }, [tables])
 
   function handleConfirmed(reservation: ReservationRecord) {
-    setTables((prev) =>
-      prev.map((t) => (t._id === reservation.tableId ? { ...t, status: 'reserved' } : t))
-    )
     setConfirmedReservation(reservation)
     // Note: selectedTable is intentionally left as-is so the modal can show
     // its own "success" step. It closes when the user dismisses it (Done).

@@ -37,6 +37,10 @@ export default function Menu() {
 
   useEffect(() => {
     const next: Record<string, string> = {}
+    for (const key of ['tableId', 'tableNumber', 'reservationId']) {
+      const value = searchParams.get(key)
+      if (value) next[key] = value
+    }
     if (activeCategory) next.category = activeCategory
     setSearchParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
