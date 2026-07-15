@@ -14,6 +14,8 @@ export interface IMenuItem extends Document {
   price: number;
   imageUrl: string;
   isAvailable: boolean;
+  isBestSeller: boolean;
+  isSeasonal: boolean;
   preparationTime: number; // Stored in minutes (e.g., 15) 
   recipe: IRecipeIngredient[];
   createdAt: Date;
@@ -50,6 +52,15 @@ const MenuItemSchema = new Schema<IMenuItem>(
       type: Boolean, 
       default: true // Easily toggles a dish on/off in the app 
     },
+isBestSeller: {
+  type: Boolean,
+  default: false
+},
+
+isSeasonal: {
+  type: Boolean,
+  default: false
+},
     preparationTime: { 
       type: Number, 
       required: true,

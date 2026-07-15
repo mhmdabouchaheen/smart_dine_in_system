@@ -38,13 +38,15 @@ export default function Login() {
     try {
       setFormError(null)
       const user = await login(form)
-      if (user.role === 'admin') navigate('/admin')
-      else if (user.role === 'staff') navigate('/staff/orders')
+      if (user.role === 'admin' || user.role === 'manager') navigate('/admin')
+      else if (user.role === 'waiter' || user.role === 'kitchen') navigate('/staff/orders')
       else navigate('/')
-    } catch {
-      setFormError('Could not sign you in. Check your details and try again.')
-    }
-  }
+    } catch (error: any) {
+  setFormError(
+    error.response?.data?.error || 'Could not sign you in. Check your details and try again.'
+  )
+}
+}
 
   return (
     <div className="max-w-md mx-auto px-6 pt-40 pb-24">

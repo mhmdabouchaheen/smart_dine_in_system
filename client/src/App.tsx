@@ -35,7 +35,7 @@ export default function App() {
 
             <Route
               element={
-                <ProtectedRoute allow={['staff', 'admin']}>
+                <ProtectedRoute allow={['admin', 'manager', 'waiter', 'kitchen']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }
@@ -50,7 +50,7 @@ export default function App() {
 
             <Route
               element={
-                <ProtectedRoute allow={['admin']}>
+                <ProtectedRoute allow={['admin', 'manager']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }

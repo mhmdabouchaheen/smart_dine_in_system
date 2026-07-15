@@ -20,18 +20,20 @@ interface NavItem {
   label: string
   href: string
   icon: typeof LayoutGrid
-  roles: Array<'staff' | 'admin'>
+  roles: DashboardRole[]
 }
 
+type DashboardRole = 'admin' | 'manager' | 'waiter' | 'kitchen'
+
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Orders Dashboard', href: '/staff/orders', icon: ClipboardList, roles: ['staff', 'admin'] },
-  { label: 'Floor Status', href: '/staff/floor', icon: Grid3x3, roles: ['staff', 'admin'] },
-  { label: 'Menu Management', href: '/staff/menu', icon: BookOpen, roles: ['staff', 'admin'] },
-  { label: 'Inventory', href: '/staff/inventory', icon: Boxes, roles: ['staff', 'admin'] },
-  { label: 'Tables & QR', href: '/staff/tables', icon: QrCode, roles: ['staff', 'admin'] },
-  { label: 'Notifications', href: '/staff/notifications', icon: Bell, roles: ['staff', 'admin'] },
-  { label: 'Dashboard', href: '/admin', icon: LayoutGrid, roles: ['admin'] },
-  { label: 'Staff', href: '/admin/staff', icon: Users, roles: ['admin'] },
+  { label: 'Orders Dashboard', href: '/staff/orders', icon: ClipboardList, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Floor Status', href: '/staff/floor', icon: Grid3x3, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Menu Management', href: '/staff/menu', icon: BookOpen, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Inventory', href: '/staff/inventory', icon: Boxes, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Tables & QR', href: '/staff/tables', icon: QrCode, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Notifications', href: '/staff/notifications', icon: Bell, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
+  { label: 'Dashboard', href: '/admin', icon: LayoutGrid, roles: ['admin', 'manager'] },
+  { label: 'Staff', href: '/admin/staff', icon: Users, roles: ['admin', 'manager'] },
 ]
 
 const SITE_LINKS = [
@@ -42,8 +44,10 @@ const SITE_LINKS = [
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth()
-  const role = user?.role === 'admin' ? 'admin' : 'staff'
-  const items = NAV_ITEMS.filter((item) => item.roles.includes(role))
+  const role = user?.role as DashboardRole | null
+  const items = role
+  ? NAV_ITEMS.filter((item) => item.roles.includes(role))
+  : []
 
   return (
     <div className="min-h-screen flex bg-noir-950">
@@ -83,7 +87,7 @@ export default function DashboardLayout() {
         </nav>
         <div className="px-6 py-6 border-t border-white/10">
           <p className="text-sm text-bone">{user?.name}</p>
-          <p className="text-xs text-bone-faint uppercase tracking-widest2 mb-4">{user?.position || role}</p>
+          <p className="text-xs text-bone-faint uppercase tracking-widest2 mb-4">{user?.role}</p>
           <button
             onClick={logout}
             className="flex items-center gap-2 text-xs uppercase tracking-widest2 text-bone-dim hover:text-ember"

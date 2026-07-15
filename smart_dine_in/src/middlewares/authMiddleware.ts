@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { User } from '../models/User';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -8,11 +9,11 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authMiddleware = (
+export const authMiddleware = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   try {
     const token = req.cookies.token;
 
@@ -24,16 +25,29 @@ export const authMiddleware = (
     }
 
     const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as {
-      id: string;
-      role: string;
-    };
+  token,
+  process.env.JWT_SECRET as string
+) as {
+  id: string;
+  role: string;
+};
 
-    req.user = decoded;
 
-    next();
+if (decoded.role !== "Customer") {
+  const user = await User.findById(decoded.id);
+
+  if (!user || !user.isActive) {
+    res.status(403).json({
+      error: "Your account has been suspended"
+    });
+    return;
+  }
+}
+
+
+req.user = decoded;
+
+next();
 
   } catch (error) {
     res.status(401).json({

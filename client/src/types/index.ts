@@ -51,14 +51,9 @@ export interface RecipeLine {
 export interface MenuItem {
   _id: string
   categoryId: string
-  course: number
-  no: string
   name: string
-  tagline: string
   price: number
   description: string
-  composition: string[]
-  pairing: string
   image: string
   isBestSeller?: boolean
   isSeasonal?: boolean
@@ -175,14 +170,13 @@ export interface PaymentRecord extends PaymentPayload {
   paidAt: string
 }
 
-export type UserRole = 'customer' | 'staff' | 'admin'
+export type UserRole = 'customer' | 'waiter' | 'kitchen' | 'manager' | 'admin'
 
 export interface AuthUser {
   _id: string
   name: string
   email: string
   role: UserRole
-  position?: string // staff/admin job title
 }
 
 export interface LoginPayload {
@@ -203,10 +197,9 @@ export interface Employee {
   email: string
   phone: string
   role: UserRole
-  position: string
   salary: number
   hiredAt: string
-  status: 'active' | 'suspended'
+  isActive: boolean
 }
 
 export type NotificationType = 'order' | 'reservation' | 'inventory' | 'system'

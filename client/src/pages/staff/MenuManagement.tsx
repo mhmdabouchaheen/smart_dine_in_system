@@ -22,13 +22,9 @@ type Tab = 'items' | 'categories'
 interface ItemForm {
   name: string
   categoryId: string
-  course: string
   price: string
-  tagline: string
   description: string
   image: string
-  composition: string
-  pairing: string
   isBestSeller: boolean
   isSeasonal: boolean
 }
@@ -36,13 +32,9 @@ interface ItemForm {
 const emptyItemForm: ItemForm = {
   name: '',
   categoryId: '',
-  course: '1',
   price: '',
-  tagline: '',
   description: '',
   image: '',
-  composition: '',
-  pairing: '',
   isBestSeller: false,
   isSeasonal: false,
 }
@@ -108,13 +100,9 @@ export default function MenuManagement() {
     setItemForm({
       name: item.name,
       categoryId: item.categoryId,
-      course: String(item.course),
       price: String(item.price),
-      tagline: item.tagline,
       description: item.description,
       image: item.image,
-      composition: item.composition.join(', '),
-      pairing: item.pairing,
       isBestSeller: !!item.isBestSeller,
       isSeasonal: !!item.isSeasonal,
     })
@@ -144,9 +132,7 @@ export default function MenuManagement() {
     const errors: FieldErrors<keyof ItemForm> = {
       name: required(itemForm.name, 'Name'),
       categoryId: required(itemForm.categoryId, 'Category'),
-      course: validatePositiveNumber(itemForm.course, 'Course'),
       price: validatePositiveNumber(itemForm.price, 'Price'),
-      tagline: required(itemForm.tagline, 'Tagline'),
       description: required(itemForm.description, 'Description'),
       image: required(itemForm.image, 'Image URL'),
     }
@@ -158,17 +144,9 @@ export default function MenuManagement() {
       const payload = {
         name: itemForm.name,
         categoryId: itemForm.categoryId,
-        course: Number(itemForm.course),
-        no: String(Number(itemForm.course)).padStart(2, '0'),
         price: Number(itemForm.price),
-        tagline: itemForm.tagline,
         description: itemForm.description,
         image: itemForm.image,
-        composition: itemForm.composition
-          .split(',')
-          .map((c) => c.trim())
-          .filter(Boolean),
-        pairing: itemForm.pairing,
         isBestSeller: itemForm.isBestSeller,
         isSeasonal: itemForm.isSeasonal,
         recipe,
@@ -297,7 +275,6 @@ export default function MenuManagement() {
                 <tr key={item._id} className="border-b border-white/5 last:border-0">
                   <td className="px-6 py-4">
                     <p className="text-bone">{item.name}</p>
-                    <p className="text-xs text-bone-faint">{item.tagline}</p>
                   </td>
                   <td className="px-6 py-4 text-bone-dim">{categoryName(item.categoryId)}</td>
                   <td className="px-6 py-4 text-bone-dim">${item.price}</td>
@@ -371,13 +348,9 @@ export default function MenuManagement() {
               </option>
             ))}
           </Select>
-          <TextInput label="Course #" type="number" min={1} value={itemForm.course} onChange={(e) => updateItemField('course', e.target.value)} error={itemErrors.course} />
           <TextInput label="Price" type="number" min={0} value={itemForm.price} onChange={(e) => updateItemField('price', e.target.value)} error={itemErrors.price} />
-          <TextInput label="Tagline" full value={itemForm.tagline} onChange={(e) => updateItemField('tagline', e.target.value)} error={itemErrors.tagline} />
           <TextArea label="Description" full rows={3} value={itemForm.description} onChange={(e) => updateItemField('description', e.target.value)} error={itemErrors.description} />
           <TextInput label="Image URL" full value={itemForm.image} onChange={(e) => updateItemField('image', e.target.value)} error={itemErrors.image} />
-          <TextInput label="Composition (comma-separated)" full value={itemForm.composition} onChange={(e) => updateItemField('composition', e.target.value)} />
-          <TextInput label="Pairing" full value={itemForm.pairing} onChange={(e) => updateItemField('pairing', e.target.value)} />
 
           <label className="flex items-center gap-2 text-sm text-bone-dim">
             <input type="checkbox" checked={itemForm.isBestSeller} onChange={(e) => updateItemField('isBestSeller', e.target.checked)} />

@@ -4,8 +4,10 @@ export interface IUser extends Document {
   name: string;
   email: string;
   passwordHash: string; // We will encrypt passwords before saving them
-  role: 'Admin' | 'Manager' | 'Waiter' | 'Kitchen';
+  role: 'admin' | 'manager' | 'waiter' | 'kitchen';
   isActive: boolean; // Easy way to disable accounts if an employee leaves
+  phone: string;
+  salary: number; // Added salary field for employees
 }
 
 const UserSchema: Schema = new Schema({
@@ -24,12 +26,20 @@ const UserSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['Admin', 'Manager', 'Waiter', 'Kitchen'],
-    default: 'Waiter'
+    enum: ['admin', 'manager', 'waiter', 'kitchen'],
+    default: 'waiter' // Default role for new employees
   },
   isActive: { 
     type: Boolean, 
     default: true 
+  },
+  phone: {
+  type: String,
+  required: true
+},
+ salary: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true }); // Automatically adds createdAt and updatedAt
 

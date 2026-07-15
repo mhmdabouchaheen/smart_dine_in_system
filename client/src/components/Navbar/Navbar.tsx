@@ -8,7 +8,6 @@ import Button from '../ui/Button'
 const NAV_LINKS = [
   { label: 'Menu', href: '/menu' },
   { label: 'Reservation', href: '/reservation' },
-  { label: 'Private Cellar', href: '/menu?category=cat-mare' },
 ]
 
 export default function Navbar() {
@@ -59,7 +58,7 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link
-                to={user.role === 'admin' ? '/admin' : user.role === 'staff' ? '/staff/orders' : '/'}
+                to={user.role === 'admin' ? '/admin' : user.role === 'waiter' || user.role === 'kitchen' || user.role === 'manager' ? '/staff/orders' : '/'}
                 className="flex items-center gap-2 text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone"
               >
                 <User size={14} /> {user.name.split(' ')[0]}

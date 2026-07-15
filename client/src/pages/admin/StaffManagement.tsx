@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff  } from 'lucide-react'
 import { fetchEmployees, createEmployee, updateEmployee, deleteEmployee } from '../../services/api'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
@@ -19,19 +19,19 @@ interface FormState {
   email: string
   phone: string
   role: UserRole
-  position: string
   salary: string
-  status: 'active' | 'suspended'
+  password: string
+  isActive: boolean
 }
 
 const emptyForm: FormState = {
   name: '',
   email: '',
   phone: '',
-  role: 'staff',
-  position: '',
+  role: 'waiter',
   salary: '',
-  status: 'active',
+  password: '',
+  isActive: true,
 }
 
 export default function StaffManagement() {
@@ -69,9 +69,9 @@ export default function StaffManagement() {
       email: emp.email,
       phone: emp.phone,
       role: emp.role,
-      position: emp.position,
       salary: String(emp.salary),
-      status: emp.status,
+      password: '',
+      isActive: emp.isActive,
     })
     setErrors({})
     setModalOpen(true)
@@ -86,7 +86,6 @@ export default function StaffManagement() {
       name: validateName(form.name),
       email: validateEmail(form.email),
       phone: validatePhone(form.phone),
-      position: form.position.trim() ? undefined : 'Position is required.',
       salary: validatePositiveNumber(form.salary, 'Salary'),
     }
     setErrors(nextErrors)
@@ -99,17 +98,20 @@ export default function StaffManagement() {
         email: form.email,
         phone: form.phone,
         role: form.role,
-        position: form.position,
         salary: Number(form.salary),
-        status: form.status,
+        password: form.password,
+        isActive: form.isActive,
       }
       if (editingId) {
         const updated = await updateEmployee(editingId, payload)
         setEmployees((prev) => prev.map((e) => (e._id === editingId ? { ...e, ...updated } : e)))
       } else {
-        const created = await createEmployee(payload)
-        setEmployees((prev) => [created, ...prev])
-      }
+  const created = await createEmployee(payload)
+
+  console.log("CREATED EMPLOYEE:", created)
+
+  setEmployees((prev) => [created, ...prev])
+}
       setModalOpen(false)
     } finally {
       setSaving(false)
@@ -145,7 +147,6 @@ export default function StaffManagement() {
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-widest2 text-bone-faint border-b border-white/10">
                 <th className="px-6 py-4 font-normal">Name</th>
-                <th className="px-6 py-4 font-normal">Position</th>
                 <th className="px-6 py-4 font-normal">Role</th>
                 <th className="px-6 py-4 font-normal">Salary</th>
                 <th className="px-6 py-4 font-normal">Status</th>
@@ -159,18 +160,16 @@ export default function StaffManagement() {
                     <p className="text-bone">{emp.name}</p>
                     <p className="text-xs text-bone-faint">{emp.email}</p>
                   </td>
-                  <td className="px-6 py-4 text-bone-dim">{emp.position}</td>
                   <td className="px-6 py-4">
                     <span className="text-[10px] uppercase tracking-widest2 text-ember">{emp.role}</span>
                   </td>
-                  <td className="px-6 py-4 text-bone-dim">${emp.salary.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-bone-dim">${(emp.salary ?? 0).toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span
-                      className={`text-[10px] uppercase tracking-widest2 ${
-                        emp.status === 'active' ? 'text-emerald-400' : 'text-red-400'
-                      }`}
+                      className={`text-[10px] uppercase tracking-widest2 ${emp.isActive ? 'text-emerald-400' : 'text-red-400'
+                        }`}
                     >
-                      {emp.status}
+                      {emp.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -200,13 +199,20 @@ export default function StaffManagement() {
           <TextInput label="Full Name" value={form.name} onChange={(e) => update('name', e.target.value)} error={errors.name} />
           <TextInput label="Email" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} error={errors.email} />
           <TextInput label="Phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} error={errors.phone} />
-          <TextInput label="Position" value={form.position} onChange={(e) => update('position', e.target.value)} error={errors.position} placeholder="Server, Sommelier, Line Cook…" />
+          <TextInput label="Password" type="password" value={form.password} onChange={(e) => update('password', e.target.value)} placeholder={editingId ? 'Leave blank to keep current password' : ''} />
           <Select label="Role" value={form.role} onChange={(e) => update('role', e.target.value as UserRole)}>
-            <option value="staff">Staff</option>
+            <option value="waiter">Waiter</option>
+            <option value="kitchen">Kitchen</option>
+            <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </Select>
           <TextInput label="Salary (annual)" type="number" min={0} value={form.salary} onChange={(e) => update('salary', e.target.value)} error={errors.salary} placeholder="52000" />
-          <Select label="Status" value={form.status} onChange={(e) => update('status', e.target.value as 'active' | 'suspended')} full>
+          <Select
+            label="Account Status"
+            value={form.isActive ? 'active' : 'suspended'}
+            onChange={(e) => update('isActive', e.target.value === 'active')}
+            full
+          >
             <option value="active">Active</option>
             <option value="suspended">Suspended</option>
           </Select>

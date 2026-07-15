@@ -8,13 +8,16 @@ import MenuDetails from '../../components/MenuDetails/MenuDetails'
 import SectionHeading from '../../components/ui/SectionHeading'
 import type { MenuItem } from '../../types'
 
-type SortOption = 'default' | 'price_asc' | 'price_desc' | 'best_selling'
+type SortOption = 'default' | 'name_desc'| 'price_asc' | 'price_desc' | 'best_selling'  | 'prep_time_asc'| 'prep_time_desc'
 
 const SORT_LABELS: Record<SortOption, string> = {
-  default: 'Chef\u2019s Order',
+ default: 'Name: A to Z',
+  name_desc: 'Name: Z to A',
   price_asc: 'Price: Low to High',
   price_desc: 'Price: High to Low',
   best_selling: 'Best Selling',
+  prep_time_asc: 'Prep Time: Short to Long',
+  prep_time_desc: 'Prep Time: Long to Short'
 }
 
 export default function Menu() {
@@ -28,12 +31,17 @@ export default function Menu() {
   const [sort, setSort] = useState<SortOption>('default')
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
 
-  const maxPrice = useMemo(() => Math.ceil(Math.max(0, ...items.map((i) => i.price))), [items])
-  const [priceRange, setPriceRange] = useState<number>(100)
+  const maxPrice = useMemo(
+  () => Math.ceil(Math.max(0, ...items.map((i) => i.price))),
+  [items]
+)
 
-  useEffect(() => {
-    if (maxPrice > 0) setPriceRange(maxPrice)
-  }, [maxPrice])
+const [minPrice, setMinPrice] = useState(0)
+const [maxSelectedPrice, setMaxSelectedPrice] = useState(maxPrice)
+
+useEffect(() => {
+  setMaxSelectedPrice(maxPrice)
+}, [maxPrice])
 
   useEffect(() => {
     const next: Record<string, string> = {}
@@ -43,7 +51,11 @@ export default function Menu() {
   }, [activeCategory])
 
   const filteredItems = useMemo(() => {
-    let result = items.filter((item) => item.price <= priceRange)
+   let result = items.filter(
+  (item) =>
+    item.price >= minPrice &&
+    item.price <= maxSelectedPrice
+)
 
     if (activeCategory) result = result.filter((i) => i.categoryId === activeCategory)
     if (bestSellerOnly) result = result.filter((i) => i.isBestSeller)
@@ -52,13 +64,14 @@ export default function Menu() {
       const q = search.trim().toLowerCase()
       result = result.filter(
         (i) =>
-          i.name.toLowerCase().includes(q) ||
-          i.tagline.toLowerCase().includes(q) ||
-          i.composition.some((c) => c.toLowerCase().includes(q))
+          i.name.toLowerCase().includes(q)
       )
     }
 
     switch (sort) {
+       case 'name_desc':
+    result = [...result].sort((a, b) => b.name.localeCompare(a.name))
+    break
       case 'price_asc':
         result = [...result].sort((a, b) => a.price - b.price)
         break
@@ -68,12 +81,24 @@ export default function Menu() {
       case 'best_selling':
         result = [...result].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0))
         break
+         case 'prep_time_asc':
+    result = [...result].sort(
+      (a, b) => (a.prepTimeMinutes || 0) - (b.prepTimeMinutes || 0)
+    )
+    break
+
+  case 'prep_time_desc':
+    result = [...result].sort(
+      (a, b) => (b.prepTimeMinutes || 0) - (a.prepTimeMinutes || 0)
+    )
+    break
       default:
-        result = [...result].sort((a, b) => a.course - b.course)
+  result = [...result].sort((a, b) => a.name.localeCompare(b.name))
+  break
     }
 
     return result
-  }, [items, activeCategory, bestSellerOnly, seasonalOnly, search, priceRange, sort])
+  }, [items, activeCategory, bestSellerOnly, seasonalOnly, search, minPrice, maxSelectedPrice, sort])
 
   const activeCategoryObj = categories.find((c) => c._id === selectedItem?.categoryId)
 
@@ -100,24 +125,54 @@ export default function Menu() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search dishes or ingredients…"
-                className="field pl-9"
+                className="field !pl-10"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">
-              Max Price — ${priceRange}
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={maxPrice || 100}
-              value={priceRange}
-              onChange={(e) => setPriceRange(Number(e.target.value))}
-              className="w-full accent-ember"
-            />
-          </div>
+             <label className="block text-[11px] uppercase tracking-widest2 text-bone-faint mb-3">
+    Price Range — ${minPrice} to ${maxSelectedPrice}
+  </label>
+
+  <div className="space-y-4 mt-2">
+    <div>
+      <p className="text-[10px] uppercase tracking-widest2 text-bone-faint mb-1">
+        Min Price
+      </p>
+      <input
+        type="range"
+        min={0}
+        max={maxPrice}
+        value={minPrice}
+        onChange={(e) =>
+          setMinPrice(
+            Math.min(Number(e.target.value), maxSelectedPrice)
+          )
+        }
+        className="w-full accent-ember"
+      />
+    </div>
+
+    <div>
+      <p className="text-[10px] uppercase tracking-widest2 text-bone-faint mb-1">
+        Max Price
+      </p>
+      <input
+        type="range"
+        min={0}
+        max={maxPrice}
+        value={maxSelectedPrice}
+        onChange={(e) =>
+          setMaxSelectedPrice(
+            Math.max(Number(e.target.value), minPrice)
+          )
+        }
+        className="w-full accent-ember"
+      />
+    </div>
+  </div>
+</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -130,12 +185,23 @@ export default function Menu() {
             <Flame size={13} /> Best Sellers
           </button>
 
+<button
+  onClick={() => setSeasonalOnly((v) => !v)}
+  className={`flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest2 border transition-colors ${
+    seasonalOnly
+      ? 'bg-ember border-ember text-noir-950'
+      : 'border-white/15 text-bone-dim hover:border-white/40'
+  }`}
+>
+  Seasonal
+</button>
+
           <div className="relative">
             <ArrowDownUp size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-bone-faint pointer-events-none" />
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
-              className="field pl-9 pr-8 !w-auto"
+              className="field !pl-10"
             >
               {Object.entries(SORT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>

@@ -11,6 +11,7 @@ import ingredientRoutes from './routes/ingredientRoutes'
 import authRoutes from './routes/authRoutes'
 import cookieParser from 'cookie-parser';
 import customerRoutes from './routes/customerRoutes';
+import managementRoutes from './routes/managementRoutes'
 
 const app = express()
 
@@ -32,5 +33,6 @@ app.use('/api/seed', seedRoutes)
 app.use('/api/inventory', ingredientRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/customers', customerRoutes);
+app.use('/api/management', managementRoutes)
 
 export default app

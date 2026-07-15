@@ -59,17 +59,17 @@ function normalizeMenuItem(item: any): MenuItem {
   return {
     _id: item._id || `item-${Date.now()}`,
     categoryId: item.categoryId || '',
-    course: item.course || 1,
-    no: item.no || '01',
     name: item.name || 'Untitled Dish',
-    tagline: item.tagline || item.description || 'Freshly prepared',
     price: Number(item.price || 0),
     description: item.description || '',
-    composition: Array.isArray(item.composition) ? item.composition : [],
-    pairing: item.pairing || '',
     image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
-    isBestSeller: Boolean(item.isBestSeller),
-    isSeasonal: Boolean(item.isSeasonal),
+    isBestSeller: Boolean(
+  item.isBestSeller ?? item.bestSeller ?? false
+),
+
+isSeasonal: Boolean(
+  item.isSeasonal ?? item.seasonal ?? false
+),
     soldCount: item.soldCount || 0,
     recipe: Array.isArray(item.recipe)
       ? item.recipe.map((line: any) => ({
@@ -229,6 +229,8 @@ export async function createMenuItem(payload: Omit<MenuItem, '_id'>): Promise<Me
       price: payload.price,
       imageUrl: payload.image,
       isAvailable: true,
+        isBestSeller: payload.isBestSeller,
+  isSeasonal: payload.isSeasonal,
       preparationTime: payload.prepTimeMinutes || 10,
       recipe: (payload.recipe || []).map((line) => ({
         ingredientId: line.ingredientId,
@@ -253,6 +255,8 @@ export async function updateMenuItem(id: string, payload: Partial<MenuItem>): Pr
       price: payload.price,
       imageUrl: payload.image,
       isAvailable: true,
+      isBestSeller: payload.isBestSeller,
+      isSeasonal: payload.isSeasonal,
       preparationTime: payload.prepTimeMinutes || 10,
       recipe: (payload.recipe || []).map((line) => ({
         ingredientId: line.ingredientId,
@@ -679,25 +683,40 @@ export async function logout(): Promise<void> {
 // --- Staff / Employees ----------------------------------------------------
 export async function fetchEmployees(): Promise<Employee[]> {
   try {
-    const { data } = await apiClient.get<Employee[]>('/staff')
+    const { data } = await apiClient.get<Employee[]>('/users')
     return data
   } catch {
     return delay(employees)
   }
 }
 
-export async function createEmployee(payload: Omit<Employee, '_id' | 'hiredAt'>): Promise<Employee> {
+interface CreateEmployeeResponse {
+  message: string
+  employee: Employee
+}
+
+export async function createEmployee(
+  payload: Omit<Employee, '_id' | 'hiredAt'>
+): Promise<Employee> {
   try {
-    const { data } = await apiClient.post<Employee>('/staff', payload)
-    return data
+    const { data } = await apiClient.post<CreateEmployeeResponse>(
+      '/users/employees',
+      payload
+    )
+
+    return data.employee
   } catch {
-    return delay({ _id: `emp-local-${Date.now()}`, hiredAt: new Date().toISOString(), ...payload })
+    return delay({
+      _id: `emp-local-${Date.now()}`,
+      hiredAt: new Date().toISOString(),
+      ...payload
+    })
   }
 }
 
 export async function updateEmployee(id: string, payload: Partial<Employee>): Promise<Employee> {
   try {
-    const { data } = await apiClient.put<Employee>(`/staff/${id}`, payload)
+    const { data } = await apiClient.put<Employee>(`/users/${id}`, payload)
     return data
   } catch {
     return delay({ _id: id, ...payload } as Employee)
@@ -706,7 +725,7 @@ export async function updateEmployee(id: string, payload: Partial<Employee>): Pr
 
 export async function deleteEmployee(id: string): Promise<{ _id: string }> {
   try {
-    const { data } = await apiClient.delete(`/staff/${id}`)
+    const { data } = await apiClient.delete(`/users/${id}`)
     return data
   } catch {
     return delay({ _id: id })
@@ -714,11 +733,17 @@ export async function deleteEmployee(id: string): Promise<{ _id: string }> {
 }
 
 // --- Admin dashboard --------------------------------------------------------
-export async function fetchDashboardStats(): Promise<DashboardStats> {
+export async function fetchDashboardStats(params?: {
+  day?: number
+  month?: number
+  year?: number
+}): Promise<DashboardStats> {
   try {
-    const { data } = await apiClient.get<DashboardStats>('/admin/dashboard')
+    const { data } = await apiClient.get<DashboardStats>('/management/dashboard', {
+      params,
+    })
     return data
-  } catch {
-    return delay(dashboardStats)
-  }
+  } catch (error) {
+  throw error
+}
 }

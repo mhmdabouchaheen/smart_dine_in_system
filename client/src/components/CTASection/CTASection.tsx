@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import Button from '../ui/Button'
 import { validateEmail } from '../../utils/validation'
+import drinks from '../../../assets/drinks.jpg'
 
 export default function CTASection() {
   const [email, setEmail] = useState('')
@@ -22,10 +23,10 @@ export default function CTASection() {
   return (
     <section className="relative border-t border-white/10">
       <div className="grid md:grid-cols-2">
-        <div className="relative overflow-hidden min-h-[360px]">
+        <div className="relative  bg-noir-900 overflow-hidden min-h-[360px]">
           <img
-            src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?q=80&w=1200&auto=format&fit=crop"
-            alt="Private cellar dining room"
+            src={drinks}
+            alt="drinks"
             className="w-full h-full object-cover absolute inset-0 grayscale-[20%]"
           />
           <div className="absolute inset-0 bg-noir-950/50" />

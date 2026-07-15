@@ -24,6 +24,15 @@ const customer = !user
     // 2. Compare entered password with hashed password
     const account = user || customer;
 
+
+// Check if employee account is suspended
+if (user && !user.isActive) {
+  return res.status(403).json({
+    error: "Your account has been suspended"
+  });
+}
+
+
 const isPasswordValid = await bcrypt.compare(
   password,
   account!.passwordHash as string

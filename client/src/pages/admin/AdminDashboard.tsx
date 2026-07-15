@@ -7,9 +7,17 @@ import type { DashboardStats } from '../../types'
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
 
-  useEffect(() => {
-    fetchDashboardStats().then(setStats)
-  }, [])
+const today = new Date()
+
+const [filters, setFilters] = useState({
+  day: today.getDate(),
+  month: today.getMonth() + 1,
+  year: today.getFullYear(),
+})
+
+useEffect(() => {
+  fetchDashboardStats(filters).then(setStats)
+}, [filters])
 
   if (!stats) return <p className="text-bone-dim text-sm">Loading dashboard…</p>
 
@@ -20,14 +28,80 @@ export default function AdminDashboard() {
         Business <em className="text-ember italic">at a glance.</em>
       </h1>
 
+      <div className="flex flex-wrap gap-3 mb-10">
+  <select
+    value={filters.day}
+    onChange={(e) =>
+      setFilters((prev) => ({
+        ...prev,
+        day: Number(e.target.value),
+      }))
+    }
+    className="field"
+  >
+    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+      <option key={day} value={day}>
+        Day {day}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={filters.month}
+    onChange={(e) =>
+      setFilters((prev) => ({
+        ...prev,
+        month: Number(e.target.value),
+      }))
+    }
+    className="field"
+  >
+    {[
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ].map((month, index) => (
+      <option key={month} value={index + 1}>
+        {month}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={filters.year}
+    onChange={(e) =>
+      setFilters((prev) => ({
+        ...prev,
+        year: Number(e.target.value),
+      }))
+    }
+    className="field"
+  >
+    {[2024, 2025, 2026].map((year) => (
+      <option key={year} value={year}>
+        {year}
+      </option>
+    ))}
+  </select>
+</div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 border border-white/10 mb-12">
         <div className="px-6 py-5 border-r border-b lg:border-b-0 border-white/10">
           <p className="text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Revenue Today</p>
-          <p className="font-display text-3xl">${stats.revenueToday.toLocaleString()}</p>
+          <p className="font-display text-3xl">${(stats.revenueToday ?? 0).toLocaleString()}</p>
         </div>
         <div className="px-6 py-5 border-b lg:border-b-0 lg:border-r border-white/10">
           <p className="text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Revenue This Month</p>
-          <p className="font-display text-3xl">${stats.revenueThisMonth.toLocaleString()}</p>
+          <p className="font-display text-3xl">${(stats.revenueThisMonth ?? 0).toLocaleString()}</p>
         </div>
         <div className="px-6 py-5 border-r border-white/10">
           <p className="text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Orders Today</p>
@@ -35,15 +109,15 @@ export default function AdminDashboard() {
         </div>
         <div className="px-6 py-5">
           <p className="text-[11px] uppercase tracking-widest2 text-bone-faint mb-2">Avg Order Value</p>
-          <p className="font-display text-3xl">${stats.avgOrderValue}</p>
+          <p className="font-display text-3xl">${stats.avgOrderValue ?? 0}</p>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-[1.4fr_1fr] gap-8 mb-12">
         <div className="border border-white/10 p-6">
-          <p className="eyebrow mb-6">Revenue This Week</p>
+          <p className="eyebrow mb-6">Daily Revenue</p>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={stats.revenueByDay}>
+            <BarChart data={stats.revenueByDay ?? []}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
               <XAxis dataKey="day" stroke="#7A7872" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="#7A7872" fontSize={12} tickLine={false} axisLine={false} />
@@ -62,7 +136,7 @@ export default function AdminDashboard() {
             <Flame size={13} /> Best-Selling Dishes
           </p>
           <ul className="space-y-4">
-            {stats.bestSellers.map((dish, idx) => (
+            {(stats.bestSellers ?? []).map((dish, idx) => (
               <li key={dish.menuItemId} className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <span className="font-display italic text-ember text-lg w-5">{idx + 1}</span>
@@ -92,7 +166,7 @@ export default function AdminDashboard() {
             </tr>
           </thead>
           <tbody>
-            {stats.topCustomers.map((c, idx) => (
+            {(stats.topCustomers ?? []).map((c, idx) => (
               <tr key={c.customerId} className="border-b border-white/5 last:border-0">
                 <td className="py-3.5 flex items-center gap-2">
                   {idx === 0 && <Crown size={13} className="text-ember" />}
