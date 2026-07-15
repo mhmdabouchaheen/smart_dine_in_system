@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Flame } from 'lucide-react'
-import { useCart } from '../../context/CartContext'
+import { useCart } from '../../context/cartContextValue'
 import SectionHeading from '../ui/SectionHeading'
 import type { MenuItem } from '../../types'
 

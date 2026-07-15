@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  checkInventory,
   createIngredient,
   deleteIngredient,
   getIngredientById,
@@ -10,6 +11,7 @@ import {
 
 const router = Router()
 
+router.post('/check', checkInventory)
 router.get('/low-stock', getLowStockIngredients)
 
 router

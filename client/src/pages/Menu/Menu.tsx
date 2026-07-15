@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Flame, ArrowDownUp } from 'lucide-react'
+import { Search, Flame, ArrowDownUp, Leaf } from 'lucide-react'
 import { useMenu } from '../../hooks/useMenu'
 import CategoryTabs from '../../components/CategoryTabs/CategoryTabs'
 import MenuList from '../../components/MenuList/MenuList'
@@ -189,16 +189,14 @@ useEffect(() => {
             <Flame size={13} /> Best Sellers
           </button>
 
-<button
-  onClick={() => setSeasonalOnly((v) => !v)}
-  className={`flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest2 border transition-colors ${
-    seasonalOnly
-      ? 'bg-ember border-ember text-noir-950'
-      : 'border-white/15 text-bone-dim hover:border-white/40'
-  }`}
->
-  Seasonal
-</button>
+          <button
+            onClick={() => setSeasonalOnly((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest2 border transition-colors ${
+              seasonalOnly ? 'bg-ember border-ember text-noir-950' : 'border-white/15 text-bone-dim hover:border-white/40'
+            }`}
+          >
+            <Leaf size={13} /> Seasonal
+          </button>
 
           <div className="relative">
             <ArrowDownUp size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-bone-faint pointer-events-none" />

@@ -99,6 +99,24 @@ export interface OrderItemPayload {
   price: number
 }
 
+export interface BackendOrderItemPayload {
+  menuItemId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  specialInstructions: string
+}
+
+export interface UpdateOrderPayload {
+  items?: BackendOrderItemPayload[]
+  totalAmount?: number
+  status?: string
+  paymentStatus?: string
+  needsAssistance?: boolean
+  note?: string
+  noteAt?: string
+}
+
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled'
 export type PaymentMethod = 'card' | 'staff_assisted'
 export type OrderPaymentStatus = 'unpaid' | 'paid' | 'awaiting_confirmation'
@@ -107,17 +125,24 @@ export interface CreateOrderPayload {
   tableId: string
   tableNumber: number
   items: OrderItemPayload[]
-  total: number
+  total?: number
+  totalAmount?: number
   paymentMethod: PaymentMethod
   paymentStatus: OrderPaymentStatus
   needsAssistance?: boolean
   reservationId?: string
+  customerId?: string
+  userId?: string
 }
 
 export interface OrderRecord {
   _id: string
   tableId: string
   tableNumber: number
+  customerId?: string
+  customerIds?: string[]
+  userId?: string
+  userIds?: string[]
   items: OrderItemPayload[]
   total: number
   status: OrderStatus

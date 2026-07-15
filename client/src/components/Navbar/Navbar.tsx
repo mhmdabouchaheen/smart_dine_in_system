@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { ShoppingBag, Menu as MenuIcon, X, User } from 'lucide-react'
-import { useCart } from '../../context/CartContext'
-import { useAuth } from '../../context/AuthContext'
+import { useCart } from '../../context/cartContextValue'
+import { useAuth } from '../../context/authContextValue'
 import Button from '../ui/Button'
 
 const NAV_LINKS = [

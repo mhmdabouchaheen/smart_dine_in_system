@@ -1,7 +1,7 @@
 import { Clock, Flame } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
-import { useCart } from '../../context/CartContext'
+import { useCart } from '../../context/cartContextValue'
 import { useIngredients } from '../../hooks/useIngredients'
 import type { Category, MenuItem } from '../../types'
 

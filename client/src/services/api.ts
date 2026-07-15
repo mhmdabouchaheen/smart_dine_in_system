@@ -1,4 +1,5 @@
 import axios from 'axios'
+// At the top of src/services/api.ts
 import type {
   Category,
   MenuItem,
@@ -21,6 +22,7 @@ import type {
   Ingredient,
   StockCheckResult,
   OrderItemPayload,
+  UpdateOrderPayload,
 } from '../types'
 import { tables, floorStats, qrCodes, employees, dashboardStats, reservations } from './mockData'
 import * as ordersStore from './ordersStore'
@@ -105,6 +107,10 @@ function normalizeOrderRecord(order: any): OrderRecord {
     _id: order._id || `order-${Date.now()}`,
     tableId: order.tableId?._id || order.tableId || 'table-01',
     tableNumber: Number(order.tableId?.tableNumber || order.tableNumber || 1),
+    customerId: order.customerId?._id || order.customerId,
+    customerIds: Array.isArray(order.customerIds) ? order.customerIds.map((id: any) => id?._id || id) : [],
+    userId: order.userId?._id || order.userId,
+    userIds: Array.isArray(order.userIds) ? order.userIds.map((id: any) => id?._id || id) : [],
     items: rawItems.map((line: any) => ({
       menuItemId: line.menuItemId || line._id || '',
       name: line.name || 'Dish',
@@ -113,7 +119,7 @@ function normalizeOrderRecord(order: any): OrderRecord {
     })),
     total: Number(order.totalAmount || order.total || 0),
     status: normalizeOrderStatus(order.status),
-    paymentMethod: 'card',
+    paymentMethod: order.paymentMethod === 'staff_assisted' ? 'staff_assisted' : 'card',
     paymentStatus: String(order.paymentStatus || 'Pending').toLowerCase() === 'paid' ? 'paid' : 'unpaid',
     needsAssistance: Boolean(order.needsAssistance),
     note: order.note || '',
@@ -344,7 +350,7 @@ export async function deleteIngredient(
   return data
 }
 // Checks whether enough stock exists for a prospective order. Always tries
-// a real endpoint first — in production this MUST be re-verified and
+// a real endpoint first - in production this MUST be re-verified and
 // applied atomically server-side (read-check-decrement in one transaction)
 // to avoid a race between two guests ordering the last portions at once.
 export async function checkStock(items: OrderItemPayload[]): Promise<StockCheckResult> {
@@ -502,35 +508,41 @@ export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
 export async function createOrder(payload: CreateOrderPayload): Promise<OrderRecord> {
   try {
     const { data } = await apiClient.post<any>('/orders', {
-      tableId: payload.tableId,
+      tableId: String(payload.tableId),
       items: payload.items.map((item) => ({
         menuItemId: item.menuItemId,
         quantity: item.qty,
+        name: item.name,
+        unitPrice: item.price,
         specialInstructions: '',
       })),
       customerId: payload.tableId,
       reservationId: payload.reservationId,
+      paymentMethod: payload.paymentMethod,
+      paymentStatus: payload.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+      needsAssistance: payload.needsAssistance,
+      userId: payload.userId,
     })
     return normalizeOrderRecord(data)
   } catch {
     const now = new Date().toISOString()
     const order: OrderRecord = {
       _id: `order-${Date.now()}`,
-      tableId: payload.tableId,
+      tableId: String(payload.tableId),
       tableNumber: payload.tableNumber,
       items: payload.items,
-      total: payload.total,
+      total: payload.totalAmount ?? payload.items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 0), 0),
       status: 'pending',
       paymentMethod: payload.paymentMethod,
       paymentStatus: payload.paymentStatus,
       needsAssistance: !!payload.needsAssistance,
+      customerId: payload.customerId,
+      userId: payload.userId,
       createdAt: now,
       updatedAt: now,
     }
     ordersStore.saveOrder(order)
 
-    // Mirrors the atomic "confirm & deduct" step a real backend would run
-    // inside the same transaction as order creation.
     const recipesByMenuItemId = Object.fromEntries(
       menuStore.listMenuItems().map((m) => [m._id, m.recipe || []])
     )
@@ -543,15 +555,39 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderRec
   }
 }
 
-export async function updateOrder(id: string, updates: Partial<OrderRecord>): Promise<OrderRecord> {
+function normalizeUpdateForLocalStore(updates: UpdateOrderPayload): Partial<OrderRecord> {
+  const normalized: Partial<OrderRecord> = {}
+
+  if (updates.items) {
+    normalized.items = updates.items.map((item) => ({
+      menuItemId: item.menuItemId,
+      name: item.name,
+      qty: item.quantity,
+      price: item.unitPrice,
+    }))
+  }
+  if (updates.totalAmount !== undefined) normalized.total = updates.totalAmount
+  if (updates.status !== undefined) normalized.status = normalizeOrderStatus(updates.status)
+  if (updates.paymentStatus !== undefined) {
+    normalized.paymentStatus = updates.paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid'
+  }
+  if (updates.needsAssistance !== undefined) normalized.needsAssistance = updates.needsAssistance
+  if (updates.note !== undefined) normalized.note = updates.note
+  if (updates.noteAt !== undefined) normalized.noteAt = updates.noteAt
+
+  return normalized
+}
+
+export async function updateOrder(id: string, updates: UpdateOrderPayload): Promise<OrderRecord> {
   try {
-    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}`, updates)
-    return data
+    const { data } = await apiClient.put<any>(`/orders/${id}`, updates)
+    return normalizeOrderRecord(data)
   } catch {
-    // Updating (not just re-creating) resets updatedAt to "now" — this is
+    // Updating (not just re-creating) resets updatedAt to "now" - this is
     // what bumps an edited order back to the end of the kitchen queue.
-    const updated = ordersStore.updateOrder(id, updates)
-    return delay(updated as OrderRecord)
+    const updated = ordersStore.updateOrder(id, normalizeUpdateForLocalStore(updates))
+    if (!updated) throw new Error(`Order ${id} not found.`)
+    return delay(updated)
   }
 }
 
@@ -564,26 +600,45 @@ export async function updateOrderStatus(id: string, status: OrderRecord['status'
     return normalizeOrderRecord(data)
   } catch {
     const updated = ordersStore.updateOrder(id, { status })
-    return delay(updated as OrderRecord)
+    if (!updated) throw new Error(`Order ${id} not found.`)
+    return delay(updated)
   }
 }
 
 export async function addOrderNote(id: string, note: string): Promise<OrderRecord> {
   try {
-    const { data } = await apiClient.put<OrderRecord>(`/orders/${id}/note`, { note })
-    return data
+    const { data } = await apiClient.put<any>(`/orders/${id}/note`, { note })
+    return normalizeOrderRecord(data)
   } catch {
     const updated = ordersStore.updateOrder(id, { note, noteAt: new Date().toISOString() })
-    return delay(updated as OrderRecord)
+    if (!updated) throw new Error(`Order ${id} not found.`)
+    return delay(updated)
   }
 }
 
-export async function requestAssistance(
-  payload: AssistanceRequestPayload,
-): Promise<{ ok: true }> {
-  await apiClient.post('/orders/assistance', payload)
-
-  return { ok: true }
+export async function requestAssistance(payload: AssistanceRequestPayload): Promise<{ ok: true }> {
+  try {
+    await apiClient.post('/orders/assistance', {
+      orderId: payload.orderId,
+      tableNumber: Number(payload.tableNumber),
+      reason: payload.reason,
+    })
+    return { ok: true }
+  } catch (error) {
+    console.error('requestAssistance failed', error)
+    if (payload.orderId) ordersStore.updateOrder(payload.orderId, { needsAssistance: true })
+    notificationsStore.addNotification({
+      _id: `notif-${Date.now()}`,
+      senderId: 'emp-02',
+      senderModel: 'User',
+      senderRole: 'Admin',
+      type: 'Order',
+      message: `Table ${payload.tableNumber} needs a team member - ${payload.reason}`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    } as any)
+    return delay({ ok: true as const })
+  }
 }
 
 // --- Notifications ---------------------------------------------------------
@@ -818,6 +873,19 @@ export async function fetchDashboardStats(params?: {
     })
     return data
   } catch (error) {
-  throw error
+    throw error
+  }
 }
+
+// Add this to your existing api.ts file
+export async function fetchTableOrders(tableId: string | number): Promise<OrderRecord[]> {
+  try {
+    const { data } = await apiClient.get<any[]>(`/orders/table/${tableId}`)
+    return data.map(normalizeOrderRecord)
+  } catch {
+    return delay(ordersStore.listOrders(String(tableId)))
+  }
 }
+
+
+
