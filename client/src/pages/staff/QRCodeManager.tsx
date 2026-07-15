@@ -81,8 +81,8 @@ export default function QRCodeManager() {
             Tables &amp; <em className="text-ember italic">QR codes.</em>
           </h1>
           <p className="text-bone-dim text-sm max-w-lg mt-3">
-            Add a new table and generate its QR code — printed on the table, it opens the digital
-            menu pre-loaded with that table&rsquo;s number for ordering.
+            Add a table and print its permanent QR code. Scanning it opens guest or account login,
+            checks the customer into that table, and then opens the menu.
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>

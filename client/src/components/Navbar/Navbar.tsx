@@ -44,6 +44,16 @@ export default function Navbar() {
               </NavLink>
             </li>
           ))}
+          {user?.role === 'customer' && (
+            <li>
+              <NavLink
+                to="/notifications"
+                className={({ isActive }) => (isActive ? 'text-ember' : 'hover:text-bone transition-colors')}
+              >
+                Notifications
+              </NavLink>
+            </li>
+          )}
         </ul>
 
         <div className="hidden md:flex items-center gap-3">

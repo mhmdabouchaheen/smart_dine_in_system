@@ -111,6 +111,7 @@ export interface CreateOrderPayload {
   paymentMethod: PaymentMethod
   paymentStatus: OrderPaymentStatus
   needsAssistance?: boolean
+  reservationId?: string
 }
 
 export interface OrderRecord {
@@ -202,18 +203,61 @@ export interface Employee {
   isActive: boolean
 }
 
-export type NotificationType = 'order' | 'reservation' | 'inventory' | 'system'
+
+
+export type NotificationRole =
+  | 'Admin'
+  | 'Waiter'
+  | 'Customer'
+
+export type NotificationType =
+  | 'Order'
+  | 'Reservation'
+  | 'Assistance'
+  | 'General'
+  | 'Urgent'
+
+export type NotificationAccountModel =
+  | 'User'
+  | 'Customer'
+
+export interface NotificationSender {
+  _id: string
+  name?: string
+  email?: string
+  role?: string
+}
 
 export interface NotificationRecord {
   _id: string
-  userId: string
-  type: NotificationType
   message: string
-  referenceId?: string
+  type: NotificationType
+
+  senderId:
+    | string
+    | NotificationSender
+
+  senderModel: NotificationAccountModel
+  senderRole: NotificationRole
+
+  recipientRole: NotificationRole
+  recipientId?: string
+  recipientModel?: NotificationAccountModel
+
   isRead: boolean
   createdAt: string
+  updatedAt?: string
 }
 
+export interface CreateNotificationPayload {
+  message: string
+  type: NotificationType
+  recipientRole: NotificationRole
+
+  // Leave empty to send to everyone
+  // belonging to recipientRole.
+  recipientId?: string
+}
 export interface AssistanceRequestPayload {
   tableNumber: number
   orderId?: string

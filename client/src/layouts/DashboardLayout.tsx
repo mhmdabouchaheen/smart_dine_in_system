@@ -99,6 +99,15 @@ export default function DashboardLayout() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-white/10 flex items-center justify-end px-8 gap-4">
+          {role === 'admin' && (
+            <Link
+              to="/staff/notifications"
+              className="flex items-center gap-2 border border-white/15 px-4 py-2 text-xs uppercase tracking-widest2 text-bone-dim hover:border-ember hover:text-ember transition-colors"
+            >
+              <Bell size={14} />
+              Send Notification
+            </Link>
+          )}
           <NotificationBell />
         </header>
         <div className="flex-1 overflow-y-auto p-8">

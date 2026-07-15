@@ -1,8 +1,8 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IReservation extends Document {
-  tableId: Schema.Types.ObjectId | string;
-  customerId?: Schema.Types.ObjectId; // Optional if guest booking [cite: 1, 24]
+  tableId: Types.ObjectId;
+  customerId?: Types.ObjectId; // Optional if guest booking [cite: 1, 24]
   customerDetails: {
     fullName: string;
     email: string;
@@ -13,6 +13,8 @@ export interface IReservation extends Document {
   seatingZone: 'The Counter' | 'The Dining Room' | 'The Private Cellar';
   status: 'Pending' | 'Confirmed' | 'Seated' | 'Cancelled' | 'No Show';
   notes?: string;
+  depositAmount: number;
+  paymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,7 +22,8 @@ export interface IReservation extends Document {
 const ReservationSchema = new Schema<IReservation>(
   {
     tableId: { 
-      type: Schema.Types.Mixed,
+      type: Schema.Types.ObjectId,
+      ref: 'Table',
       required: true 
     },
     customerId: { 
@@ -50,7 +53,9 @@ const ReservationSchema = new Schema<IReservation>(
     notes: { 
       type: String, 
       default: '' 
-    }
+    },
+    depositAmount: { type: Number, default: 0, min: 0 },
+    paymentId: { type: String, trim: true }
   },
   { 
     timestamps: true 

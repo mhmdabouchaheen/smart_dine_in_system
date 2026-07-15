@@ -18,6 +18,7 @@ import Inventory from './pages/staff/Inventory'
 import QRCodeManager from './pages/staff/QRCodeManager'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import StaffManagement from './pages/admin/StaffManagement'
+import CustomerNotifications from './pages/customer/Notifications'
 
 export default function App() {
   return (
@@ -29,6 +30,11 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/menu" element={<Menu />} />
               <Route path="/reservation" element={<Reservation />} />
+              <Route path="/notifications" element={
+                <ProtectedRoute allow={['customer']}>
+                  <CustomerNotifications />
+                </ProtectedRoute>
+              } />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
             </Route>

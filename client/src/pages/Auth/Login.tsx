@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { UserRound, LogIn } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { TextInput } from '../../components/ui/FormField'
 import Button from '../../components/ui/Button'
 import { validateEmail, hasErrors, type FieldErrors } from '../../utils/validation'
+import { checkInTable } from '../../services/api'
 
 interface FormState {
   email: string
@@ -16,14 +17,30 @@ type Stage = 'choice' | 'form'
 export default function Login() {
   const { login, continueAsGuest, isLoading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [stage, setStage] = useState<Stage>('choice')
   const [form, setForm] = useState<FormState>({ email: '', password: '' })
   const [errors, setErrors] = useState<FieldErrors<keyof FormState>>({})
   const [formError, setFormError] = useState<string | null>(null)
 
-  function handleGuest() {
+  const scannedTableId = searchParams.get('tableId')
+  const scannedTableNumber = searchParams.get('tableNumber')
+  const menuDestination = scannedTableId
+    ? `/menu?tableId=${encodeURIComponent(scannedTableId)}&tableNumber=${encodeURIComponent(scannedTableNumber || '')}`
+    : '/'
+
+  async function finishCustomerEntry() {
+    if (scannedTableId) await checkInTable(scannedTableId)
+    navigate(menuDestination)
+  }
+
+  async function handleGuest() {
     continueAsGuest()
-    navigate('/')
+    try {
+      await finishCustomerEntry()
+    } catch {
+      setFormError('This table is not currently available. Please ask a staff member for help.')
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -121,7 +138,7 @@ export default function Login() {
 
           <p className="text-sm text-bone-dim mt-8">
             New here?{' '}
-            <Link to="/signup" className="text-ember hover:underline">
+            <Link to={`/signup${searchParams.toString() ? `?${searchParams.toString()}` : ''}`} className="text-ember hover:underline">
               Create an account
             </Link>
           </p>

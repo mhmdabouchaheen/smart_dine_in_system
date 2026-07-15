@@ -122,9 +122,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         status: 'pending',
       })
     } else {
+      const params = new URLSearchParams(window.location.search)
+      const tableId = params.get('tableId') || 'table-01'
+      const tableNumber = Number(params.get('tableNumber') || 1)
       order = await api.createOrder({
-        tableId: 'table-01',
-        tableNumber: 1,
+        tableId,
+        tableNumber,
+        reservationId: params.get('reservationId') || undefined,
         items: orderItems,
         total,
         paymentMethod: options.paymentMethod,

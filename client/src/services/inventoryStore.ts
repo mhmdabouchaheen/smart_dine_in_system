@@ -1,7 +1,8 @@
 import type { Ingredient } from '../types'
 import { readList, writeList } from './localStore'
-import { ingredients as seedIngredients } from './mockData'
 import { addNotification } from './notificationsStore'
+import { ingredients as seedIngredients } from './mockData'
+
 
 const KEY = 'noir_sel_inventory_db'
 
@@ -24,15 +25,17 @@ export function getIngredient(id: string): Ingredient | undefined {
 function maybeNotifyLowStock(before: Ingredient | undefined, after: Ingredient): void {
   const wasAbove = !before || before.quantityInStock >= before.reorderThreshold
   const nowBelow = after.quantityInStock < after.reorderThreshold
-  // Only fire the moment stock *crosses* the threshold, so restocking or
-  // repeated small edits don't spam duplicate alerts.
+
   if (wasAbove && nowBelow) {
     addNotification({
       _id: `notif-${Date.now()}`,
-      userId: 'emp-02',
-      type: 'inventory',
       message: `${after.name} is running low — ${after.quantityInStock} ${after.unit} left (threshold: ${after.reorderThreshold}).`,
-      referenceId: after._id,
+      type: 'General',
+      senderId: 'emp-02',
+      senderModel: 'User',
+      senderRole: 'Admin',
+      recipientRole: 'Waiter',
+      recipientId: after._id,
       isRead: false,
       createdAt: new Date().toISOString(),
     })
