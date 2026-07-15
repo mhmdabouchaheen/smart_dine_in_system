@@ -29,15 +29,11 @@ import type {
   CalculateRedemptionResponse,
   RedeemResponse,
 } from '../types'
-import { tables, floorStats, qrCodes, employees, dashboardStats, reservations } from './mockData'
-import * as ordersStore from './ordersStore'
 import type {
   CreateNotificationPayload,
   NotificationRecord,
 } from '../types'
-import * as menuStore from './menuStore'
-import * as inventoryStore from './inventoryStore'
-import * as notificationsStore from './notificationsStore'
+import { getGuestSessionId } from '../utils/session'
 // Base URL for the Express server. Set VITE_API_URL in a .env file once the
 // backend (server/) is running, e.g. VITE_API_URL=http://localhost:5000/api
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -49,10 +45,16 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+apiClient.interceptors.request.use((config) => {
+  const guestSessionId = getGuestSessionId()
+  if (guestSessionId) {
+    config.headers['x-guest-session-id'] = guestSessionId
+  }
+  return config
+})
 
-function delay<T>(value: T, ms = 250): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms))
-}
+
+
 
 function normalizeCategory(category: any): Category {
   return {
@@ -159,14 +161,31 @@ function normalizeReservationStatus(
 }
 function normalizeReservationRecord(reservation: any): ReservationRecord {
   const customer = reservation.customerDetails || {}
+  
+  let formattedDate = ''
+  let formattedTime = ''
+  if (reservation.dateTime) {
+    const d = new Date(reservation.dateTime)
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      formattedDate = `${y}-${m}-${day}`
+      
+      const hr = String(d.getHours()).padStart(2, '0')
+      const min = String(d.getMinutes()).padStart(2, '0')
+      formattedTime = `${hr}:${min}`
+    }
+  }
+
   return {
     _id: reservation._id || `res-${Date.now()}`,
     tableId: reservation.tableId?._id || reservation.tableId || '',
     name: customer.fullName || customer.name || '',
     email: customer.email || '',
     phone: customer.phone || '',
-    date: reservation.dateTime ? new Date(reservation.dateTime).toISOString().slice(0, 10) : '',
-    time: reservation.dateTime ? new Date(reservation.dateTime).toISOString().slice(11, 16) : '',
+    date: formattedDate,
+    time: formattedTime,
     partySize: Number(reservation.partySize || 1),
     notes: reservation.notes || '',
     status: normalizeReservationStatus(reservation.status),
@@ -178,125 +197,81 @@ function normalizeReservationRecord(reservation: any): ReservationRecord {
 
 // --- Menu ---------------------------------------------------------------
 export async function fetchCategories(): Promise<Category[]> {
-  try {
-    const { data } = await apiClient.get<any[]>('/menu/categories')
-    return data.map(normalizeCategory)
-  } catch {
-    return delay(menuStore.listCategories())
-  }
+  const { data } = await apiClient.get<any[]>('/menu/categories')
+  return data.map(normalizeCategory)
 }
 
 export async function createCategory(payload: Omit<Category, '_id'>): Promise<Category> {
-  try {
-    const { data } = await apiClient.post<any>('/menu/categories', { name: payload.name })
-    return normalizeCategory(data)
-  } catch {
-    const category: Category = { _id: `cat-${Date.now()}`, ...payload }
-    menuStore.saveCategory(category)
-    return delay(category)
-  }
+  const { data } = await apiClient.post<any>('/menu/categories', { name: payload.name })
+  return normalizeCategory(data)
 }
 
 export async function updateCategory(id: string, payload: Partial<Category>): Promise<Category> {
-  try {
-    const { data } = await apiClient.put<Category>(`/categories/${id}`, payload)
-    return data
-  } catch {
-    const existing = menuStore.listCategories().find((c) => c._id === id)
-    const updated = { ...(existing as Category), ...payload, _id: id }
-    menuStore.saveCategory(updated)
-    return delay(updated)
-  }
+  const { data } = await apiClient.put<Category>(`/categories/${id}`, payload)
+  return data
 }
 
 export async function deleteCategory(id: string): Promise<{ _id: string }> {
-  try {
-    const { data } = await apiClient.delete(`/categories/${id}`)
-    return data
-  } catch {
-    menuStore.deleteCategory(id)
-    return delay({ _id: id })
-  }
+  const { data } = await apiClient.delete(`/categories/${id}`)
+  return data
 }
 
 export async function fetchMenu(): Promise<MenuItem[]> {
-  try {
-    const { data: categoriesData } = await apiClient.get<any[]>('/menu/categories')
-    const categories = categoriesData || []
-    const allItems: MenuItem[] = []
+  const { data: categoriesData } = await apiClient.get<any[]>('/menu/categories')
+  const categories = categoriesData || []
+  const allItems: MenuItem[] = []
 
-    for (const category of categories) {
-      const { data } = await apiClient.get<any[]>(`/menu/items/category/${category._id}`)
-      allItems.push(...(data || []).map(normalizeMenuItem))
-    }
-
-    return allItems
-  } catch {
-    return delay(menuStore.listMenuItems())
+  for (const category of categories) {
+    const { data } = await apiClient.get<any[]>(`/menu/items/category/${category._id}`)
+    allItems.push(...(data || []).map(normalizeMenuItem))
   }
+
+  return allItems
 }
 
 export async function createMenuItem(payload: Omit<MenuItem, '_id'>): Promise<MenuItem> {
-  try {
-    const body = {
-      categoryId: payload.categoryId,
-      name: payload.name,
-      description: payload.description,
-      price: payload.price,
-      imageUrl: payload.image,
-      isAvailable: true,
-        isBestSeller: payload.isBestSeller,
-  isSeasonal: payload.isSeasonal,
-      preparationTime: payload.prepTimeMinutes || 10,
-      recipe: (payload.recipe || []).map((line) => ({
-        ingredientId: line.ingredientId,
-        quantityRequired: line.quantityRequired,
-      })),
-    }
-    const { data } = await apiClient.post<any>('/menu/items', body)
-    return normalizeMenuItem(data)
-  } catch {
-    const item: MenuItem = { _id: `item-${Date.now()}`, ...payload }
-    menuStore.saveMenuItem(item)
-    return delay(item)
+  const body = {
+    categoryId: payload.categoryId,
+    name: payload.name,
+    description: payload.description,
+    price: payload.price,
+    imageUrl: payload.image,
+    isAvailable: true,
+    isBestSeller: payload.isBestSeller,
+    isSeasonal: payload.isSeasonal,
+    preparationTime: payload.prepTimeMinutes || 10,
+    recipe: (payload.recipe || []).map((line) => ({
+      ingredientId: line.ingredientId,
+      quantityRequired: line.quantityRequired,
+    })),
   }
+  const { data } = await apiClient.post<any>('/menu/items', body)
+  return normalizeMenuItem(data)
 }
 
 export async function updateMenuItem(id: string, payload: Partial<MenuItem>): Promise<MenuItem> {
-  try {
-    const body = {
-      categoryId: payload.categoryId,
-      name: payload.name,
-      description: payload.description,
-      price: payload.price,
-      imageUrl: payload.image,
-      isAvailable: true,
-      isBestSeller: payload.isBestSeller,
-      isSeasonal: payload.isSeasonal,
-      preparationTime: payload.prepTimeMinutes || 10,
-      recipe: (payload.recipe || []).map((line) => ({
-        ingredientId: line.ingredientId,
-        quantityRequired: line.quantityRequired,
-      })),
-    }
-    const { data } = await apiClient.put<any>(`/menu/items/${id}`, body)
-    return normalizeMenuItem(data)
-  } catch {
-    const existing = menuStore.getMenuItem(id)
-    const updated = { ...(existing as MenuItem), ...payload, _id: id }
-    menuStore.saveMenuItem(updated)
-    return delay(updated)
+  const body = {
+    categoryId: payload.categoryId,
+    name: payload.name,
+    description: payload.description,
+    price: payload.price,
+    imageUrl: payload.image,
+    isAvailable: true,
+    isBestSeller: payload.isBestSeller,
+    isSeasonal: payload.isSeasonal,
+    preparationTime: payload.prepTimeMinutes || 10,
+    recipe: (payload.recipe || []).map((line) => ({
+      ingredientId: line.ingredientId,
+      quantityRequired: line.quantityRequired,
+    })),
   }
+  const { data } = await apiClient.put<any>(`/menu/items/${id}`, body)
+  return normalizeMenuItem(data)
 }
 
 export async function deleteMenuItem(id: string): Promise<{ _id: string }> {
-  try {
-    const { data } = await apiClient.put<any>(`/menu/items/${id}`, { isAvailable: false })
-    return { _id: data?._id || id }
-  } catch {
-    menuStore.deleteMenuItem(id)
-    return delay({ _id: id })
-  }
+  const { data } = await apiClient.put<any>(`/menu/items/${id}`, { isAvailable: false })
+  return { _id: data?._id || id }
 }
 
 
@@ -361,49 +336,8 @@ export async function deleteIngredient(
 // applied atomically server-side (read-check-decrement in one transaction)
 // to avoid a race between two guests ordering the last portions at once.
 export async function checkStock(items: OrderItemPayload[]): Promise<StockCheckResult> {
-  try {
-    const { data } = await apiClient.post<StockCheckResult>('/inventory/check', { items })
-    return data
-  } catch {
-    const menuItems = menuStore.listMenuItems()
-    const ingredientList = inventoryStore.listIngredients()
-    const ingredientById = new Map(ingredientList.map((i) => [i._id, i]))
-    const requiredByIngredient = new Map<string, number>()
-    const issues: StockCheckResult['issues'] = []
-
-    for (const line of items) {
-      const menuItem = menuItems.find((m) => m._id === line.menuItemId)
-      if (!menuItem?.recipe) continue
-      for (const req of menuItem.recipe) {
-        const key = req.ingredientId
-        requiredByIngredient.set(key, (requiredByIngredient.get(key) || 0) + req.quantityRequired * line.qty)
-      }
-    }
-
-    for (const line of items) {
-      const menuItem = menuItems.find((m) => m._id === line.menuItemId)
-      if (!menuItem?.recipe) continue
-      for (const req of menuItem.recipe) {
-        const ingredient = ingredientById.get(req.ingredientId)
-        if (!ingredient) continue
-        const totalNeeded = requiredByIngredient.get(req.ingredientId) || 0
-        if (totalNeeded > ingredient.quantityInStock) {
-          issues.push({
-            menuItemId: menuItem._id,
-            menuItemName: menuItem.name,
-            ingredientName: ingredient.name,
-            needed: totalNeeded,
-            available: ingredient.quantityInStock,
-            unit: ingredient.unit,
-          })
-        }
-      }
-    }
-
-    // De-duplicate: one issue per (menuItem, ingredient) pair
-    const deduped = Array.from(new Map(issues.map((i) => [`${i.menuItemId}:${i.ingredientName}`, i])).values())
-    return delay({ ok: deduped.length === 0, issues: deduped })
-  }
+  const { data } = await apiClient.post<StockCheckResult>('/inventory/check', { items })
+  return data
 }
 function normalizeTableStatus(status: unknown): TableEntity['status'] {
   const value = String(status ?? '').trim().toLowerCase()
@@ -436,29 +370,20 @@ function normalizeTableStatus(status: unknown): TableEntity['status'] {
 }
 // --- Tables / Floor -------------------------------------------------------
 export async function fetchTables(): Promise<TableEntity[]> {
-  try {
-    const { data } = await apiClient.get<any[]>('/tables')
-
-    return data.map((table) => ({
-      _id: table._id,
-      tableNumber: Number(table.tableNumber),
-      capacity: Number(table.capacity),
-      zone: table.zone || 'Dining Room',
-      status: normalizeTableStatus(table.status),
-      currentOrder: table.currentOrder,
-    }))
-  } catch {
-    return delay(tables)
-  }
+  const { data } = await apiClient.get<any[]>('/tables')
+  return data.map((table) => ({
+    _id: table._id,
+    tableNumber: Number(table.tableNumber),
+    capacity: Number(table.capacity),
+    zone: table.zone || 'Dining Room',
+    status: normalizeTableStatus(table.status),
+    currentOrder: table.currentOrder,
+  }))
 }
 
 export async function fetchFloorStats(): Promise<FloorStats> {
-  try {
-    const { data } = await apiClient.get<FloorStats>('/tables/stats')
-    return data
-  } catch {
-    return delay(floorStats)
-  }
+  const { data } = await apiClient.get<FloorStats>('/tables/stats')
+  return data
 }
 
 export async function createTable(payload: {
@@ -466,51 +391,25 @@ export async function createTable(payload: {
   zone: string
   capacity: number
 }): Promise<{ table: TableEntity; qrCode: QRCodeRecord }> {
-  try {
-    const { data } = await apiClient.post('/tables', payload)
-    return data
-  } catch {
-    const table: TableEntity = {
-      _id: `table-local-${Date.now()}`,
-      tableNumber: payload.tableNumber,
-      zone: payload.zone,
-      capacity: payload.capacity,
-      status: 'available',
-    }
-    const qrCode: QRCodeRecord = {
-      _id: `qr-local-${Date.now()}`,
-      tableId: table._id,
-      tableNumber: table.tableNumber,
-      qrToken: `TOK-${table.tableNumber}-${Math.random().toString(36).slice(2, 8)}`,
-      url: `https://noirandsel.example/order?table=${table.tableNumber}`,
-      createdAt: new Date().toISOString(),
-    }
-    return delay({ table, qrCode })
-  }
+  const { data } = await apiClient.post('/tables', payload)
+  return data
 }
 
 export async function fetchQRCodes(): Promise<QRCodeRecord[]> {
-  try {
-    const { data } = await apiClient.get<QRCodeRecord[]>('/tables/qr-codes')
-    return data
-  } catch {
-    return delay(qrCodes)
-  }
+  const { data } = await apiClient.get<QRCodeRecord[]>('/tables/qr-codes')
+  return data
 }
 
 export async function checkInTable(tableId: string): Promise<TableEntity> {
-  const { data } = await apiClient.patch<any>(`/tables/${tableId}/check-in`)
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.patch<any>(`/tables/${tableId}/check-in`, { guestSessionId })
   return { ...data, zone: data.zone || 'Dining Room', status: normalizeTableStatus(data.status) }
 }
 
 // --- Orders ---------------------------------------------------------------
 export async function fetchOrders(): Promise<OrderRecord[]> {
-  try {
-    const { data } = await apiClient.get<any[]>('/orders/active')
-    return data.map(normalizeOrderRecord)
-  } catch {
-    return delay(ordersStore.listOrders())
-  }
+  const { data } = await apiClient.get<any[]>('/orders/active')
+  return data.map(normalizeOrderRecord)
 }
 
 export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
@@ -518,7 +417,7 @@ export async function fetchOrder(id: string): Promise<OrderRecord | undefined> {
     const orders = await fetchOrders()
     return orders.find((order) => order._id === id)
   } catch {
-    return delay(ordersStore.getOrder(id))
+    return undefined
   }
 }
 
@@ -539,39 +438,11 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderRec
       paymentStatus: payload.paymentStatus === 'paid' ? 'Paid' : 'Pending',
       needsAssistance: payload.needsAssistance,
       userId: payload.userId,
+      guestSessionId: payload.guestSessionId || getGuestSessionId(),
     })
     return normalizeOrderRecord(data)
   } catch (error) {
-    // Do not turn a rejected backend order into a local fake order. That would
-    // make the customer think it succeeded while staff cannot see it.
-    if (axios.isAxiosError(error) && error.response) throw error
-    const now = new Date().toISOString()
-    const order: OrderRecord = {
-      _id: `order-${Date.now()}`,
-      tableId: String(payload.tableId),
-      tableNumber: payload.tableNumber,
-      items: payload.items,
-      total: payload.totalAmount ?? payload.items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 0), 0),
-      status: 'pending',
-      paymentMethod: payload.paymentMethod,
-      paymentStatus: payload.paymentStatus,
-      needsAssistance: !!payload.needsAssistance,
-      customerId: payload.customerId,
-      userId: payload.userId,
-      createdAt: now,
-      updatedAt: now,
-    }
-    ordersStore.saveOrder(order)
-
-    const recipesByMenuItemId = Object.fromEntries(
-      menuStore.listMenuItems().map((m) => [m._id, m.recipe || []])
-    )
-    inventoryStore.decrementForOrder(
-      payload.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty })),
-      recipesByMenuItemId
-    )
-
-    return delay(order)
+    throw error
   }
 }
 
@@ -599,78 +470,40 @@ function normalizeUpdateForLocalStore(updates: UpdateOrderPayload): Partial<Orde
 }
 
 export async function updateOrder(id: string, updates: UpdateOrderPayload): Promise<OrderRecord> {
-  try {
-    const { data } = await apiClient.put<any>(`/orders/${id}`, updates)
-    return normalizeOrderRecord(data)
-  } catch {
-    // Updating (not just re-creating) resets updatedAt to "now" - this is
-    // what bumps an edited order back to the end of the kitchen queue.
-    const updated = ordersStore.updateOrder(id, normalizeUpdateForLocalStore(updates))
-    if (!updated) throw new Error(`Order ${id} not found.`)
-    return delay(updated)
-  }
+  const { data } = await apiClient.put<any>(`/orders/${id}`, updates)
+  return normalizeOrderRecord(data)
 }
 
 export async function updateOrderStatus(id: string, status: OrderRecord['status']): Promise<OrderRecord> {
-  try {
-    const { data } = await apiClient.patch<any>(`/orders/${id}/status`, {
-      status: status.charAt(0).toUpperCase() + status.slice(1),
-      paymentStatus: 'Pending',
-    })
-    return normalizeOrderRecord(data)
-  } catch {
-    const updated = ordersStore.updateOrder(id, { status })
-    if (!updated) throw new Error(`Order ${id} not found.`)
-    return delay(updated)
-  }
+  const { data } = await apiClient.patch<any>(`/orders/${id}/status`, {
+    status: status.charAt(0).toUpperCase() + status.slice(1),
+  })
+  return normalizeOrderRecord(data)
 }
 
 export async function addOrderNote(id: string, note: string): Promise<OrderRecord> {
-  try {
-    const { data } = await apiClient.put<any>(`/orders/${id}/note`, { note })
-    return normalizeOrderRecord(data)
-  } catch {
-    const updated = ordersStore.updateOrder(id, { note, noteAt: new Date().toISOString() })
-    if (!updated) throw new Error(`Order ${id} not found.`)
-    return delay(updated)
-  }
+  const { data } = await apiClient.put<any>(`/orders/${id}/note`, { note })
+  return normalizeOrderRecord(data)
 }
 
 export async function requestAssistance(payload: AssistanceRequestPayload): Promise<{ ok: true }> {
-  try {
-    await apiClient.post('/orders/assistance', {
-      orderId: payload.orderId,
-      tableNumber: Number(payload.tableNumber),
-      reason: payload.reason,
-    })
-    return { ok: true }
-  } catch (error) {
-    console.error('requestAssistance failed', error)
-    if (payload.orderId) ordersStore.updateOrder(payload.orderId, { needsAssistance: true })
-    notificationsStore.addNotification({
-      _id: `notif-${Date.now()}`,
-      senderId: 'emp-02',
-      senderModel: 'User',
-      senderRole: 'Admin',
-      type: 'Order',
-      message: `Table ${payload.tableNumber} needs a team member - ${payload.reason}`,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    } as any)
-    return delay({ ok: true as const })
-  }
+  await apiClient.post('/orders/assistance', {
+    orderId: payload.orderId,
+    tableNumber: Number(payload.tableNumber),
+    reason: payload.reason,
+  })
+  return { ok: true }
 }
 
 // --- Notifications ---------------------------------------------------------
 // --- Notifications -------------------------------------------
 
 export async function fetchNotifications(): Promise<NotificationRecord[]> {
-  try {
-    const { data } = await apiClient.get<any[]>('/notifications')
-    return data
-  } catch {
-    return delay(notificationsStore.listNotifications())
-  }
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.get<any[]>('/notifications', {
+    headers: { 'x-guest-session-id': guestSessionId }
+  })
+  return data
 }
 
 export async function createNotification(
@@ -680,70 +513,38 @@ export async function createNotification(
     const { data } = await apiClient.post<any>('/notifications', payload)
     return data
   } catch {
-    // If the request failed due to not being authenticated, try the public endpoint
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const err: any = arguments[0]
-      // If Axios-like error with a 401, try the public route
-      // (Guests can submit notifications via /notifications/public)
-      // Note: we defensively attempt this even if the original error isn't 401.
-      const { data } = await apiClient.post<any>('/notifications/public', payload)
-      return data
-    } catch {
-      const created = notificationsStore.addNotification({
-        _id: `notif-${Date.now()}`,
-        message: payload.message,
-        type: payload.type,
-        senderId: 'local-user',
-        senderModel: 'User',
-        senderRole: 'Admin',
-        recipientRole: payload.recipientRole,
-        recipientId: payload.recipientId,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-      })
-
-      return delay(created)
-    }
+    // Guests may not be authenticated — fall back to the public endpoint
+    const { data } = await apiClient.post<any>('/notifications/public', payload)
+    return data
   }
 }
 
 export async function markNotificationRead(
   id: string,
 ): Promise<NotificationRecord> {
-  try {
-    const { data } = await apiClient.put<any>(`/notifications/${id}/read`, {})
-    return data
-  } catch {
-    notificationsStore.markRead(id)
-    return delay(notificationsStore.listNotifications().find((item) => item._id === id) as NotificationRecord)
-  }
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.put<any>(`/notifications/${id}/read`, {}, {
+    headers: { 'x-guest-session-id': guestSessionId }
+  })
+  return data
 }
 
 export async function markAllNotificationsRead(): Promise<{ modifiedCount: number }> {
-  try {
-    const { data } = await apiClient.put<{ modifiedCount: number }>('/notifications/read-all', {})
-    return data
-  } catch {
-    const items = notificationsStore.listNotifications().map((item) => ({ ...item, isRead: true }))
-    const storageKey = 'noir_sel_notifications_db'
-    localStorage.setItem(storageKey, JSON.stringify(items))
-    return { modifiedCount: items.length }
-  }
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.put<{ modifiedCount: number }>('/notifications/read-all', {}, {
+    headers: { 'x-guest-session-id': guestSessionId }
+  })
+  return data
 }
 
 export async function deleteNotification(
   id: string,
 ): Promise<{ _id: string }> {
-  try {
-    const { data } = await apiClient.delete<{ _id: string }>(`/notifications/${id}`)
-    return data
-  } catch {
-    const all = notificationsStore.listNotifications().filter((item) => item._id !== id)
-    const storageKey = 'noir_sel_notifications_db'
-    localStorage.setItem(storageKey, JSON.stringify(all))
-    return { _id: id }
-  }
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.delete<{ _id: string }>(`/notifications/${id}`, {
+    headers: { 'x-guest-session-id': guestSessionId }
+  })
+  return data
 }
 
 
@@ -756,57 +557,33 @@ export async function fetchReservationAvailability(
   return data
 }
 export async function fetchReservations(): Promise<ReservationRecord[]> {
-  try {
-    const { data } = await apiClient.get<any[]>('/reservations')
-    return data.map(normalizeReservationRecord)
-  } catch {
-    return delay(reservations)
-  }
+  const { data } = await apiClient.get<any[]>('/reservations')
+  return data.map(normalizeReservationRecord)
 }
 
 export async function createReservation(
   payload: ReservationPayload & { depositAmount: number; paymentId: string }
 ): Promise<ReservationRecord> {
-  try {
-    const { data } = await apiClient.post<any>('/reservations', {
-      tableId: payload.tableId,
-      customerDetails: {
-        fullName: payload.name,
-        email: payload.email,
-        phone: payload.phone,
-      },
-      dateTime: new Date(`${payload.date}T${payload.time}`).toISOString(),
-      partySize: payload.partySize,
-      notes: payload.notes || '',
-      depositAmount: payload.depositAmount,
-      paymentId: payload.paymentId,
-    })
-    return normalizeReservationRecord(data)
-  } catch {
-    return delay({
-      _id: `res-local-${Date.now()}`,
-      ...payload,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    })
-  }
+  const { data } = await apiClient.post<any>('/reservations', {
+    tableId: payload.tableId,
+    customerDetails: {
+      fullName: payload.name,
+      email: payload.email,
+      phone: payload.phone,
+    },
+    dateTime: new Date(`${payload.date}T${payload.time}`).toISOString(),
+    partySize: payload.partySize,
+    notes: payload.notes || '',
+    depositAmount: payload.depositAmount,
+    paymentId: payload.paymentId,
+  })
+  return normalizeReservationRecord(data)
 }
 
 // --- Payments -----------------------------------------------------------
 export async function createPayment(payload: PaymentPayload): Promise<PaymentRecord> {
-  try {
-    const { data } = await apiClient.post<PaymentRecord>('/payments', payload)
-    return data
-  } catch {
-    // Simulate a payment gateway round trip
-    await delay(null, 900)
-    return {
-      _id: `pay-local-${Date.now()}`,
-      ...payload,
-      status: 'succeeded',
-      paidAt: new Date().toISOString(),
-    }
-  }
+  const { data } = await apiClient.post<PaymentRecord>('/payments', payload)
+  return data
 }
 
 // --- Auth (guest + registered customers, staff) --------------------------
@@ -848,38 +625,18 @@ interface CreateEmployeeResponse {
 export async function createEmployee(
   payload: Omit<Employee, '_id' | 'hiredAt'>
 ): Promise<Employee> {
-  try {
-    const { data } = await apiClient.post<CreateEmployeeResponse>(
-      '/users/employees',
-      payload
-    )
-
-    return data.employee
-  } catch {
-    return delay({
-      _id: `emp-local-${Date.now()}`,
-      hiredAt: new Date().toISOString(),
-      ...payload
-    })
-  }
+  const { data } = await apiClient.post<CreateEmployeeResponse>('/users/employees', payload)
+  return data.employee
 }
 
 export async function updateEmployee(id: string, payload: Partial<Employee>): Promise<Employee> {
-  try {
-    const { data } = await apiClient.put<Employee>(`/users/${id}`, payload)
-    return data
-  } catch {
-    return delay({ _id: id, ...payload } as Employee)
-  }
+  const { data } = await apiClient.put<Employee>(`/users/${id}`, payload)
+  return data
 }
 
 export async function deleteEmployee(id: string): Promise<{ _id: string }> {
-  try {
-    const { data } = await apiClient.delete(`/users/${id}`)
-    return data
-  } catch {
-    return delay({ _id: id })
-  }
+  const { data } = await apiClient.delete(`/users/${id}`)
+  return data
 }
 
 // --- Admin dashboard --------------------------------------------------------
@@ -888,24 +645,17 @@ export async function fetchDashboardStats(params?: {
   month?: number
   year?: number
 }): Promise<DashboardStats> {
-  try {
-    const { data } = await apiClient.get<DashboardStats>('/management/dashboard', {
-      params,
-    })
-    return data
-  } catch (error) {
-    throw error
-  }
+  const { data } = await apiClient.get<DashboardStats>('/management/dashboard', { params })
+  return data
 }
 
 // Add this to your existing api.ts file
 export async function fetchTableOrders(tableId: string | number): Promise<OrderRecord[]> {
-  try {
-    const { data } = await apiClient.get<any[]>(`/orders/table/${tableId}`)
-    return data.map(normalizeOrderRecord)
-  } catch {
-    return delay(ordersStore.listOrders(String(tableId)))
-  }
+  const guestSessionId = getGuestSessionId()
+  const { data } = await apiClient.get<any[]>(`/orders/table/${tableId}`, {
+    headers: { 'x-guest-session-id': guestSessionId }
+  })
+  return data.map(normalizeOrderRecord)
 }
 
 
@@ -985,6 +735,21 @@ export async function fetchCustomerDetailedHistory(customerId: string): Promise<
   orders: OrderRecord[]
 }> {
   const { data } = await apiClient.get<any>(`/loyalty/history/customer/${customerId}`)
+  return data
+}
+
+export async function fetchCustomerProfile(): Promise<{
+  customer: any
+}> {
+  const { data } = await apiClient.get<any>('/customers/me')
+  return data
+}
+
+export async function updateCustomerProfile(updates: { name?: string; phone?: string }): Promise<{
+  message: string
+  customer: any
+}> {
+  const { data } = await apiClient.put<any>('/customers/me', updates)
   return data
 }
 

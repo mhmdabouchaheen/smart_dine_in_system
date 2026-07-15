@@ -99,6 +99,30 @@ next()
   }
 }
 
+export const optionalAuthMiddleware = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return next();
+    
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return next();
+
+    const decoded = jwt.verify(token, secret) as { id: string; role: string; };
+    const role = normalizeRole(decoded.role);
+    
+    if (role) {
+      req.user = { id: decoded.id, role };
+    }
+    next();
+  } catch {
+    next();
+  }
+}
+
 export const authorizeRoles = (
   ...allowedRoles: NotificationRole[]
 ) => {

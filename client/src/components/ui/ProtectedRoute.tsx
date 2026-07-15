@@ -18,7 +18,8 @@ export default function ProtectedRoute({ children, allow }: ProtectedRouteProps)
     return <Navigate to="/login" replace />
   }
 
-  if (!allow.includes(user.role)) {
+  const normalizedAllow = allow.map((r) => r.toLowerCase())
+  if (!normalizedAllow.includes(user.role.toLowerCase())) {
     return <Navigate to="/" replace />
   }
 

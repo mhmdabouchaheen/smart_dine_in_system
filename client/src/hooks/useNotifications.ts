@@ -16,8 +16,12 @@ import type {
   CreateNotificationPayload,
   NotificationRecord,
 } from '../types'
+import { useAuth } from '../context/authContextValue'
 
 export function useNotifications() {
+  const { user } = useAuth()
+  const isGuest = user?._id?.startsWith('guest-') || false
+
   const [items, setItems] =
     useState<NotificationRecord[]>([])
 
@@ -28,6 +32,14 @@ export function useNotifications() {
     useState<string | null>(null)
 
   const load = useCallback(async () => {
+    // Guests are allowed to fetch notifications now.
+    // Unauthenticated visitors (no user object at all) should skip.
+    if (!user) {
+      setItems([])
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
@@ -48,7 +60,7 @@ export function useNotifications() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user, isGuest])
 
   useEffect(() => {
     load()

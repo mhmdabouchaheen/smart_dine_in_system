@@ -4,7 +4,10 @@ export interface ICustomer extends Document {
   isGuest: boolean;
   name?: string;
   email?: string;
+  phone?: string;
   passwordHash?: string;
+  /** Unique identifier for guest sessions — server-side tracking */
+  guestSessionId?: string;
   /** Current redeemable balance — cached sum of the LoyaltyTransaction ledger */
   loyaltyPoints: number;
   /** Lifetime total earned — never decreases after a redemption */
@@ -32,6 +35,19 @@ const CustomerSchema: Schema = new Schema(
       unique: true,
       sparse: true,
       required: false,
+    },
+
+    phone: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+
+    guestSessionId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
     },
 
     passwordHash: {

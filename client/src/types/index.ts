@@ -134,6 +134,7 @@ export interface CreateOrderPayload {
   reservationId?: string
   customerId?: string
   userId?: string
+  guestSessionId?: string
 }
 
 export interface OrderRecord {

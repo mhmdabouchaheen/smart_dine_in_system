@@ -45,9 +45,11 @@ export const seedDatabase = async (
 
     const testNotification = await Notification.create({
       message: "System initialized successfully. Welcome to the team!",
-      type: "GeneralNote",
+      type: "General",
       senderId: manager._id,
-      targetRole: "All",
+      senderModel: "User",
+      senderRole: "Manager",
+      recipientRole: "Admin",
     });
 
     // Ensure at least one menu category, menu item and table exist so orders can be created

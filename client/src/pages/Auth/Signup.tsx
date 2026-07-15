@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { TextInput } from '../../components/ui/FormField'
 import Button from '../../components/ui/Button'
 import { checkInTable } from '../../services/api'
+import { getCurrentTableId } from '../../utils/session'
 import {
   validateName,
   validateEmail,
@@ -51,11 +52,11 @@ export default function Signup() {
     try {
       setFormError(null)
       await signup(form)
-      const tableId = searchParams.get('tableId')
-      const tableNumber = searchParams.get('tableNumber') || ''
+      const tableId = searchParams.get('tableId') || getCurrentTableId()
+      const tableNumber = searchParams.get('tableNumber')
       if (tableId) {
         await checkInTable(tableId)
-        navigate(`/menu?tableId=${encodeURIComponent(tableId)}&tableNumber=${encodeURIComponent(tableNumber)}`)
+        navigate(`/menu?tableId=${encodeURIComponent(tableId)}${tableNumber ? `&tableNumber=${encodeURIComponent(tableNumber)}` : ''}`)
       } else {
         navigate('/')
       }

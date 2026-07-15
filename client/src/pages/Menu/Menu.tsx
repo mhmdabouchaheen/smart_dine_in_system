@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Search, Flame, ArrowDownUp, Leaf } from 'lucide-react'
+import { useSearchParams, Link } from 'react-router-dom'
+import { Search, Flame, ArrowDownUp, Leaf, CalendarCheck } from 'lucide-react'
 import { useMenu } from '../../hooks/useMenu'
 import CategoryTabs from '../../components/CategoryTabs/CategoryTabs'
 import MenuList from '../../components/MenuList/MenuList'
 import MenuDetails from '../../components/MenuDetails/MenuDetails'
 import SectionHeading from '../../components/ui/SectionHeading'
+import { setCurrentTableId, setIsQrSession } from '../../utils/session'
 import type { MenuItem } from '../../types'
 
 type SortOption = 'default' | 'name_desc'| 'price_asc' | 'price_desc' | 'best_selling'  | 'prep_time_asc'| 'prep_time_desc'
@@ -43,9 +44,34 @@ useEffect(() => {
   setMaxSelectedPrice(maxPrice)
 }, [maxPrice])
 
+  // Sync table param into session storage whenever it appears in the URL
+  const tableParam = searchParams.get('table') || searchParams.get('tableId') || searchParams.get('tableNumber')
+  useEffect(() => {
+    if (tableParam) {
+      setCurrentTableId(tableParam)
+    }
+  }, [tableParam])
+
+  const reservationId = searchParams.get('reservationId')
+  const isPreOrdering = !!reservationId
+
+  // Track how the table session was established:
+  //  - tableId/tableNumber in URL without reservationId = QR scan → can pay at table
+  //  - reservationId in URL = advance reservation → card only
+  useEffect(() => {
+    if (tableParam && !reservationId) {
+      // Arrived via QR code scan
+      setIsQrSession(true)
+    } else if (reservationId) {
+      // Arrived via reservation pre-order flow
+      setIsQrSession(false)
+    }
+  }, [tableParam, reservationId])
+
   useEffect(() => {
     const next: Record<string, string> = {}
-    for (const key of ['tableId', 'tableNumber', 'reservationId']) {
+    // Preserve all table & reservation params through category changes
+    for (const key of ['tableId', 'tableNumber', 'reservationId', 'table']) {
       const value = searchParams.get(key)
       if (value) next[key] = value
     }
@@ -115,9 +141,24 @@ useEffect(() => {
         description="Search, filter by element, or sort by what the table orders most."
       />
 
+      {isPreOrdering && (
+        <div className="mt-8 flex items-start gap-3 px-5 py-4 border border-ember/30 bg-ember/5">
+          <CalendarCheck size={18} className="text-ember shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-bone font-semibold">Pre-ordering for your reservation</p>
+            <p className="text-xs text-bone-dim mt-1">
+              Items added here will be pre-ordered for your table.{' '}
+              <span className="text-ember">Card payment required</span> — no cash or pay-at-table for future reservations.{' '}
+              <Link to="/reservation" className="underline hover:text-bone">Not your reservation?</Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-10 mb-8">
         <CategoryTabs categories={categories} activeId={activeCategory} onSelect={setActiveCategory} />
       </div>
+
 
       <div className="grid md:grid-cols-[1fr_auto] gap-6 items-end mb-10 pb-8 border-b border-white/10">
         <div className="grid sm:grid-cols-2 gap-6">

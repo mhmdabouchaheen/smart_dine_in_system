@@ -72,7 +72,7 @@ export default function Reservation() {
           <CheckCircle2 size={18} className="text-ember shrink-0" />
           <p>
             You&rsquo;re confirmed for {confirmedReservation.date} at {confirmedReservation.time} — party of{' '}
-            {confirmedReservation.partySize}. A confirmation was sent to {confirmedReservation.email}.
+            {confirmedReservation.partySize}.
           </p>
         </div>
       )}
@@ -100,15 +100,14 @@ export default function Reservation() {
                 </p>
 
                 <div className="mt-auto">
-                  {isAvailable ? (
-                    <Button className="w-full" onClick={() => setSelectedTable(table)}>
-                      Reserve This Table
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-bone-faint" style={{ color: statusMeta(table.status).color }}>
-                      Not available right now
+                  {!isAvailable && (
+                    <p className="text-xs mb-3" style={{ color: statusMeta(table.status).color }}>
+                      Please check the availability first.
                     </p>
                   )}
+                  <Button className="w-full" variant={isAvailable ? 'primary' : 'outline'} onClick={() => setSelectedTable(table)}>
+                    Reserve This Table
+                  </Button>
                 </div>
               </div>
             )

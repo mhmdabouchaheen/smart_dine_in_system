@@ -1,4 +1,6 @@
 import express, { Request, Response } from 'express';
+import { validate } from '../middlewares/validate';
+import { LoginSchema, SignupSchema } from '../schemas';
 import {
   loginUser,
   signupCustomer,
@@ -12,8 +14,8 @@ import { User } from '../models/User';
 
 const router = express.Router();
 
-router.post('/login', loginUser);
-router.post('/signup', signupCustomer);
+router.post('/login', validate(LoginSchema), loginUser);
+router.post('/signup', validate(SignupSchema), signupCustomer);
 router.post('/logout', logoutUser);
 router.get('/me', authMiddleware, getCurrentUser);
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {

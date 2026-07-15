@@ -1,12 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Coins, CreditCard, Lock, Minus, Pencil, Plus, Sparkles, Trash2, UserRound, X } from 'lucide-react'
 
 import { useCart } from '../../context/cartContextValue'
 import { useAuth } from '../../context/authContextValue'
-import { calculateRedemption, checkStock, createPayment, fetchTableOrders, redeemLoyaltyPoints, requestAssistance } from '../../services/api'
+import { calculateRedemption, checkStock, createPayment, redeemLoyaltyPoints, requestAssistance } from '../../services/api'
 import type { CalculateRedemptionResponse, OrderRecord } from '../../types'
-import { getCurrentTableId } from '../../utils/session'
+import { getCurrentTableId, getIsQrSession } from '../../utils/session'
 import {
   hasErrors,
   validateCVV,
@@ -60,7 +61,7 @@ export default function OrderDrawer() {
   } = useCart()
 
   const { user } = useAuth()
-  const isLoggedInCustomer = !!(user && user.role === 'customer' && !user._id.startsWith('guest-'))
+  const isLoggedInCustomer = !!(user && user.role.toLowerCase() === 'customer' && !user._id.startsWith('guest-'))
 
   const [stage, setStage] = useState<Stage>('items')
   const [card, setCard] = useState<CardForm>(emptyCard)
@@ -71,9 +72,13 @@ export default function OrderDrawer() {
   const [assistanceNote, setAssistanceNote] = useState('')
   const [isRequestingHelp, setRequestingHelp] = useState(false)
   const [stockIssues, setStockIssues] = useState<string[]>([])
+  
+  const navigate = useNavigate()
+  // isQrSession: true  = customer scanned a physical QR at the table → can pay at table
+  // isQrSession: false = customer came via advance reservation     → card only
+  const isQrSession = getIsQrSession()
+  const isPreOrdering = new URLSearchParams(window.location.search).has('reservationId')
   const [isCheckingStock, setCheckingStock] = useState(false)
-  const [myOrders, setMyOrders] = useState<OrderRecord[]>([])
-  const [isFetchingOrders, setIsFetchingOrders] = useState(false)
   // Loyalty state
   const [loyaltyCalc, setLoyaltyCalc] = useState<CalculateRedemptionResponse | null>(null)
   const [loyaltyLoading, setLoyaltyLoading] = useState(false)
@@ -83,16 +88,6 @@ export default function OrderDrawer() {
   const [earnedPoints, setEarnedPoints] = useState<number | null>(null)
   const [remainingAfterPoints, setRemainingAfterPoints] = useState<number | null>(null)
   const tableId = getCurrentTableId()
-
-  useEffect(() => {
-    if (!isDrawerOpen || !tableId) return
-
-    setIsFetchingOrders(true)
-    fetchTableOrders(tableId)
-      .then(setMyOrders)
-      .catch((err) => console.error('Failed to fetch table orders:', err))
-      .finally(() => setIsFetchingOrders(false))
-  }, [isDrawerOpen, tableId])
 
   const showOrderStatus = !!activeOrder && !isEditing && stage === 'items'
 
@@ -421,24 +416,7 @@ export default function OrderDrawer() {
                 </div>
               ) : (
                 <>
-                  {stage === 'items' && myOrders.length > 0 && (
-                    <div className="mb-8">
-                      <h4 className="text-[11px] uppercase tracking-widest2 text-bone-dim mb-4">
-                        {isFetchingOrders ? 'Loading table orders' : `Table ${tableId || 'orders'}`}
-                      </h4>
-                      <div className="space-y-3">
-                        {myOrders.map((order) => (
-                          <div key={order._id} className="p-4 border border-white/10 bg-white/5 flex justify-between items-center">
-                            <div>
-                              <p className="text-sm font-medium text-bone">Order #{order._id.slice(-4)}</p>
-                              <p className="text-xs text-bone-faint mt-1">{STATUS_LABEL[order.status] || order.status}</p>
-                            </div>
-                            <span className="text-sm font-display text-ember">{formatMoney(order.total)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
 
                   {stage === 'items' && (
                     <div className="space-y-5">
@@ -509,16 +487,19 @@ export default function OrderDrawer() {
                         </span>
                         <span className="block text-xs text-bone-faint mt-2">Complete payment now.</span>
                       </button>
-                      <button
-                        className="w-full border border-white/15 hover:border-ember p-5 text-left transition-colors"
-                        onClick={handleStaffAssisted}
-                        disabled={isProcessing}
-                      >
-                        <span className="flex items-center gap-3 text-bone">
-                          <UserRound size={18} /> Pay at table
-                        </span>
-                        <span className="block text-xs text-bone-faint mt-2">Ask an employee to bring the check.</span>
-                      </button>
+                      {/* Pay at table only available when customer is physically at the table (QR scan) */}
+                      {isQrSession && !isPreOrdering && (
+                        <button
+                          className="w-full border border-white/15 hover:border-ember p-5 text-left transition-colors"
+                          onClick={handleStaffAssisted}
+                          disabled={isProcessing}
+                        >
+                          <span className="flex items-center gap-3 text-bone">
+                            <UserRound size={18} /> Pay at table
+                          </span>
+                          <span className="block text-xs text-bone-faint mt-2">Ask an employee to bring the check.</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -672,9 +653,15 @@ export default function OrderDrawer() {
                 </div>
 
                 {stage === 'items' && (
-                  <Button className="w-full" onClick={handlePlaceOrder} disabled={items.length === 0 || isCheckingStock || isProcessing}>
-                    {isCheckingStock ? 'Checking...' : isProcessing ? 'Placing Order...' : isEditing ? 'Update order' : 'Send to Kitchen'}
-                  </Button>
+                  !tableId ? (
+                    <Button className="w-full" onClick={() => { closeDrawer(); navigate('/reservation'); }}>
+                      Reserve a table first
+                    </Button>
+                  ) : (
+                    <Button className="w-full" onClick={handlePlaceOrder} disabled={items.length === 0 || isCheckingStock || isProcessing}>
+                      {isCheckingStock ? 'Checking...' : isProcessing ? 'Placing Order...' : isEditing ? 'Update order' : 'Send to Kitchen'}
+                    </Button>
+                  )
                 )}
                 {stage === 'loyalty' && null /* Buttons are inline in loyalty stage */}
                 {stage === 'method' && (

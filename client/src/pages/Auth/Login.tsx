@@ -6,6 +6,7 @@ import { TextInput } from '../../components/ui/FormField'
 import Button from '../../components/ui/Button'
 import { validateEmail, hasErrors, type FieldErrors } from '../../utils/validation'
 import { checkInTable } from '../../services/api'
+import { getCurrentTableId } from '../../utils/session'
 
 interface FormState {
   email: string
@@ -23,10 +24,11 @@ export default function Login() {
   const [errors, setErrors] = useState<FieldErrors<keyof FormState>>({})
   const [formError, setFormError] = useState<string | null>(null)
 
-  const scannedTableId = searchParams.get('tableId')
+  const scannedTableId = searchParams.get('tableId') || getCurrentTableId()
   const scannedTableNumber = searchParams.get('tableNumber')
+  
   const menuDestination = scannedTableId
-    ? `/menu?tableId=${encodeURIComponent(scannedTableId)}&tableNumber=${encodeURIComponent(scannedTableNumber || '')}`
+    ? `/menu?tableId=${encodeURIComponent(scannedTableId)}${scannedTableNumber ? `&tableNumber=${encodeURIComponent(scannedTableNumber)}` : ''}`
     : '/'
 
   async function finishCustomerEntry() {
@@ -106,6 +108,8 @@ export default function Login() {
               </p>
             </div>
           </button>
+          
+          {formError && <p className="text-sm text-ember mt-4">{formError}</p>}
         </div>
       )}
 

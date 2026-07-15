@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import { validate } from '../middlewares/validate'
+import { CreateNotificationSchema } from '../schemas'
 
 import {
   createNotification,
@@ -8,20 +10,20 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '../controllers/notificationController'
-import { authMiddleware } from '../middlewares/authMiddleware'
+import { authMiddleware, optionalAuthMiddleware } from '../middlewares/authMiddleware'
 
 const router = Router()
 
 // Public endpoint for unauthenticated (guest) submissions.
 // Placed before auth middleware so guests may post without a JWT cookie.
-router.post('/public', createPublicNotification)
-
-router.use(authMiddleware)
+router.post('/public', validate(CreateNotificationSchema), createPublicNotification)
 
 router
   .route('/')
-  .get(getMyNotifications)
-  .post(createNotification)
+  .get(optionalAuthMiddleware, getMyNotifications)
+  .post(authMiddleware, validate(CreateNotificationSchema), createNotification)
+
+router.use(authMiddleware)
 
 router.put(
   '/read-all',

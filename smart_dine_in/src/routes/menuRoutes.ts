@@ -4,7 +4,8 @@ import {
   getCategories, 
   createMenuItem, 
   getMenuItemsByCategory,
-  updateMenuItem
+  updateMenuItem,
+  deleteMenuItem
 } from '../controllers/menuController';
 
 const router = Router();
@@ -17,7 +18,8 @@ router.route('/items')
   .post(createMenuItem);
 
 router.route('/items/:id')
-  .put(updateMenuItem);
+  .put(updateMenuItem)
+  .delete(deleteMenuItem);
 
 router.route('/items/category/:categoryId')
   .get(getMenuItemsByCategory);

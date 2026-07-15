@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { MenuCategory } from '../models/MenuCategory';
 import { MenuItem } from '../models/MenuItem';
+import { Order } from '../models/Order';
 import { globalCoalescer } from '../utils/requestCoalescer';
 
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
@@ -96,6 +97,44 @@ export const getMenuItemsByCategory = async (req: Request, res: Response): Promi
       { cacheTTL: 10000 }
     );
     res.status(200).json(items);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+};
+
+export const deleteMenuItem = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const item = await MenuItem.findById(id);
+    if (!item) {
+      res.status(404).json({ error: 'Menu item not found' });
+      return;
+    }
+
+    // Check if this item appears in any active (non-paid, non-completed) orders
+    const activeOrderWithItem = await Order.findOne({
+      'items.menuItemId': item._id,
+      status: { $in: ['Pending', 'Preparing', 'Ready', 'Served'] },
+      paymentStatus: { $ne: 'Paid' },
+    });
+
+    if (activeOrderWithItem) {
+      // Cannot hard-delete — disable the item instead
+      item.isAvailable = false;
+      await item.save();
+      globalCoalescer.invalidate(`menu:category:${item.categoryId}`);
+      res.status(200).json({
+        message: 'Item has active orders and cannot be deleted. It has been disabled instead.',
+        item,
+        disabled: true,
+      });
+      return;
+    }
+
+    await MenuItem.findByIdAndDelete(id);
+    globalCoalescer.invalidate(`menu:category:${item.categoryId}`);
+    res.status(200).json({ message: 'Menu item deleted successfully', deleted: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

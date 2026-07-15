@@ -16,10 +16,14 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const isCustomer = user?.role?.toLowerCase() === 'customer'
   const isGuest = user && user._id.startsWith('guest-')
   const links = [...NAV_LINKS]
-  if (user && user.role === 'Customer' && !isGuest) {
+  if (user && isCustomer && !isGuest) {
     links.push({ label: 'Rewards', href: '/loyalty' })
+  }
+  if (!user || isCustomer) {
+    links.push({ label: 'Notifications', href: '/notifications' })
   }
 
   useEffect(() => {
@@ -50,16 +54,6 @@ export default function Navbar() {
               </NavLink>
             </li>
           ))}
-          {user?.role === 'Customer' && (
-            <li>
-              <NavLink
-                to="/notifications"
-                className={({ isActive }) => (isActive ? 'text-ember' : 'hover:text-bone transition-colors')}
-              >
-                Notifications
-              </NavLink>
-            </li>
-          )}
         </ul>
 
         <div className="hidden md:flex items-center gap-3">
@@ -74,7 +68,11 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link
-                to={user.role === 'Admin' ? '/admin' : user.role === 'Waiter' || user.role === 'Kitchen' || user.role === 'Manager' ? '/staff/orders' : '/'}
+                to={
+                  user.role === 'Admin' ? '/admin' : 
+                  ['Waiter', 'Kitchen', 'Manager'].includes(user.role) ? '/staff/orders' : 
+                  (!isGuest ? '/profile' : '/')
+                }
                 className="flex items-center gap-2 text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone"
               >
                 <User size={14} /> {user.name.split(' ')[0]}

@@ -1,10 +1,10 @@
+import { z } from 'zod'
+
 export type FieldErrors<T extends string = string> = Partial<Record<T, string>>
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-// Accepts formats like +1 555-123-4567, (555) 123-4567, 5551234567
-const PHONE_RE = /^[+]?[\d\s()-]{7,20}$/
-const CARD_NUMBER_RE = /^\d{13,19}$/
-const CVV_RE = /^\d{3,4}$/
+export function hasErrors(errors: FieldErrors): boolean {
+  return Object.values(errors).some(Boolean)
+}
 
 export function required(value: unknown, label: string): string | undefined {
   if (value === null || value === undefined) return `${label} is required.`
@@ -13,24 +13,31 @@ export function required(value: unknown, label: string): string | undefined {
   return undefined
 }
 
+function getZodError(result: any): string | undefined {
+  if (result.success) return undefined
+  if (!result.error) return 'Invalid input.'
+  const issue = result.error.issues?.[0] || result.error.errors?.[0]
+  return issue?.message || 'Invalid input.'
+}
+
+const emailSchema = z.string().min(1, 'Email is required.').email('Enter a valid email address.')
 export function validateEmail(value: string): string | undefined {
-  if (!value) return 'Email is required.'
-  if (!EMAIL_RE.test(value)) return 'Enter a valid email address.'
-  return undefined
+  return getZodError(emailSchema.safeParse(value))
 }
 
+const phoneSchemaOptional = z.string().regex(/^[+]?[\d\s()-]{7,20}$/, 'Enter a valid phone number.').optional().or(z.literal(''))
+const phoneSchemaRequired = z.string().min(1, 'Phone number is required.').regex(/^[+]?[\d\s()-]{7,20}$/, 'Enter a valid phone number.')
 export function validatePhone(value: string, optional = false): string | undefined {
-  if (!value) return optional ? undefined : 'Phone number is required.'
-  if (!PHONE_RE.test(value)) return 'Enter a valid phone number.'
-  return undefined
+  return getZodError(optional ? phoneSchemaOptional.safeParse(value) : phoneSchemaRequired.safeParse(value))
 }
 
+const passwordSchema = z.string()
+  .min(1, 'Password is required.')
+  .min(8, 'Password must be at least 8 characters.')
+  .regex(/[A-Z]/, 'Include at least one uppercase letter.')
+  .regex(/[0-9]/, 'Include at least one number.')
 export function validatePassword(value: string): string | undefined {
-  if (!value) return 'Password is required.'
-  if (value.length < 8) return 'Password must be at least 8 characters.'
-  if (!/[A-Z]/.test(value)) return 'Include at least one uppercase letter.'
-  if (!/[0-9]/.test(value)) return 'Include at least one number.'
-  return undefined
+  return getZodError(passwordSchema.safeParse(value))
 }
 
 export function validateConfirmPassword(value: string, password: string): string | undefined {
@@ -40,17 +47,21 @@ export function validateConfirmPassword(value: string, password: string): string
 }
 
 export function validateName(value: string, label = 'Name'): string | undefined {
-  if (!value || !value.trim()) return `${label} is required.`
-  if (value.trim().length < 2) return `${label} must be at least 2 characters.`
-  return undefined
+  const schema = z.string().trim().min(1, `${label} is required.`).min(2, `${label} must be at least 2 characters.`)
+  return getZodError(schema.safeParse(value))
 }
 
 export function validatePositiveNumber(value: number | string, label: string): string | undefined {
-  const num = typeof value === 'string' ? Number(value) : value
-  if (value === '' || value === null || value === undefined || Number.isNaN(num)) {
+  if (value === '' || value === null || value === undefined) return `${label} is required.`
+  
+  const schema = z.coerce.number().positive(`${label} must be greater than 0.`)
+  const result = schema.safeParse(value)
+  
+  if (!result.success) {
+    const msg = getZodError(result)
+    if (msg === `${label} must be greater than 0.`) return msg
     return `${label} is required.`
   }
-  if (num <= 0) return `${label} must be greater than 0.`
   return undefined
 }
 
@@ -74,11 +85,9 @@ export function validatePartySize(value: number, max = 20): string | undefined {
   return undefined
 }
 
+const cardNumberSchema = z.string().transform(v => v.replace(/\s/g, '')).pipe(z.string().min(1, 'Card number is required.').regex(/^\d{13,19}$/, 'Enter a valid card number.'))
 export function validateCardNumber(value: string): string | undefined {
-  const digitsOnly = value.replace(/\s/g, '')
-  if (!digitsOnly) return 'Card number is required.'
-  if (!CARD_NUMBER_RE.test(digitsOnly)) return 'Enter a valid card number.'
-  return undefined
+  return getZodError(cardNumberSchema.safeParse(value))
 }
 
 export function validateCardExpiry(value: string): string | undefined {
@@ -94,12 +103,7 @@ export function validateCardExpiry(value: string): string | undefined {
   return undefined
 }
 
+const cvvSchema = z.string().min(1, 'CVV is required.').regex(/^\d{3,4}$/, 'Enter a valid CVV.')
 export function validateCVV(value: string): string | undefined {
-  if (!value) return 'CVV is required.'
-  if (!CVV_RE.test(value)) return 'Enter a valid CVV.'
-  return undefined
-}
-
-export function hasErrors(errors: FieldErrors): boolean {
-  return Object.values(errors).some(Boolean)
+  return getZodError(cvvSchema.safeParse(value))
 }

@@ -6,7 +6,9 @@ import { Table } from '../models/Table';
 import { Reservation } from '../models/Reservation';
 import { Ingredient } from '../models/Ingredient';
 import { Customer } from '../models/Customer';
+import { TableSession } from '../models/TableSession';
 import { awardPointsForOrder } from '../services/loyaltyService';
+import { emitToKitchen, emitToTable, emitToWaiters, emitToManagement } from '../socket';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -70,7 +72,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
   try {
     const {
       tableId, items, customerId, userId, reservationId,
-      paymentMethod, paymentStatus, needsAssistance,
+      paymentMethod, paymentStatus, needsAssistance, guestSessionId
     } = req.body;
 
     // --- SAFETY CHECK ---
@@ -81,10 +83,48 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     const tableObjectId = await resolveTableId(tableId, session);
     if (!tableObjectId) throw new Error('Valid table is required.');
 
-    const customerObjectId = objectIdOrUndefined(customerId);
+    // --- FUTURE RESERVATION PAYMENT CHECK ---
+    if (reservationId) {
+      const reservation = await Reservation.findById(reservationId).session(session);
+      if (reservation) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const resDate = new Date(reservation.dateTime);
+        resDate.setHours(0, 0, 0, 0);
+        
+        // If reservation is for a future day, restrict payment to card
+        if (resDate.getTime() > today.getTime()) {
+          const method = (paymentMethod || '').toLowerCase();
+          if (method !== 'card' && method !== 'credit card') {
+             res.status(400).json({ error: 'Pre-orders for future reservations must be paid by card.' });
+             return;
+          }
+        }
+      }
+    }
+
+    let customerObjectId = objectIdOrUndefined(customerId);
     const userObjectId = objectIdOrUndefined(userId);
 
-    console.log(`[orderController] createOrder body: tableId=${tableId}, customerId=${customerId}, paymentStatus=${paymentStatus}`);
+    // If it's a guest with a session ID, find or create the guest Customer record
+    if (!customerObjectId && guestSessionId) {
+      let guestCustomer = await Customer.findOne({ guestSessionId }).session(session);
+      if (!guestCustomer) {
+        const created = await Customer.create([{
+          isGuest: true,
+          guestSessionId,
+          name: 'Guest',
+          loyaltyPoints: 0,
+        }], { session });
+        guestCustomer = created[0];
+      }
+      if (guestCustomer) {
+        customerObjectId = guestCustomer._id as Types.ObjectId;
+      }
+    }
+
+    console.log(`[orderController] createOrder body: tableId=${tableId}, customerId=${customerId}, guestSessionId=${guestSessionId}`);
     console.log(`[orderController] resolved customerObjectId: ${customerObjectId}`);
 
     // Process items and deduct inventory
@@ -246,8 +286,10 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       }
 
       
-      
       res.status(200).json(existingOrder);
+      emitToKitchen('order:created', existingOrder);
+      emitToTable(existingOrder.tableId.toString(), 'order:status_updated', existingOrder);
+      emitToManagement('table:status_changed', { tableId: existingOrder.tableId, status: 'Occupied' });
       return;
     }
 
@@ -297,8 +339,10 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     }
 
     
-    
     res.status(201).json(newOrder);
+    emitToKitchen('order:created', newOrder);
+    emitToTable(newOrder.tableId.toString(), 'order:status_updated', newOrder);
+    emitToManagement('table:status_changed', { tableId: newOrder.tableId, status: 'Occupied' });
 
   } catch (error) {
     
@@ -335,13 +379,17 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     const { id } = req.params;
     const { status, paymentStatus } = req.body;
     const now = new Date();
-    const timingUpdate: Record<string, Date> = {};
-    if (status === 'Preparing') timingUpdate.preparationStartedAt = now;
-    if (status === 'Ready') timingUpdate.readyAt = now;
-    if (status === 'Served') timingUpdate.servedAt = now;
+    const updatePayload: any = {};
+    if (status) updatePayload.status = status;
+    if (paymentStatus) updatePayload.paymentStatus = paymentStatus;
+    
+    if (status === 'Preparing') updatePayload.preparationStartedAt = now;
+    if (status === 'Ready') updatePayload.readyAt = now;
+    if (status === 'Served') updatePayload.servedAt = now;
+    
     const order = await Order.findByIdAndUpdate(
       id,
-      { status, paymentStatus, ...timingUpdate },
+      updatePayload,
       { new: true },
     );
     
@@ -356,9 +404,22 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       order.paymentStatus !== 'Paid' &&
       !order.loyaltyProcessed;
 
-    // Free the table when order is fully resolved
+    // Free the table and close session when order is fully resolved
     if (status === 'Completed' || status === 'Cancelled') {
       await Table.findByIdAndUpdate(order.tableId, { status: 'Available' }, { session });
+      await TableSession.updateMany(
+        { tableId: order.tableId, active: true },
+        { active: false, endedAt: new Date() },
+      );
+    }
+
+    // Also free the table if payment is being marked Paid
+    if (paymentStatus === 'Paid' && order.paymentStatus !== 'Paid') {
+      await Table.findByIdAndUpdate(order.tableId, { status: 'Available' }, { session });
+      await TableSession.updateMany(
+        { tableId: order.tableId, active: true },
+        { active: false, endedAt: new Date() },
+      );
     }
 
     if (isBeingPaid && order.customerId) {
@@ -370,6 +431,18 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     }
 
     res.status(200).json(order);
+    
+    // Emit real-time events
+    emitToTable(order.tableId.toString(), 'order:status_updated', order);
+    emitToKitchen('order:status_updated', order);
+    emitToWaiters('order:status_updated', order);
+    
+    if (status === 'Completed' || status === 'Cancelled' || paymentStatus === 'Paid') {
+      emitToManagement('table:status_changed', { tableId: order.tableId, status: 'Available' });
+    }
+    if (paymentStatus === 'Paid') {
+      emitToWaiters('order:paid', order);
+    }
   } catch (error) {
     
     
@@ -401,19 +474,45 @@ export const updateOrder = async (req: Request, res: Response): Promise<void> =>
 
     // Apply allowed updates
     if (updates.items !== undefined && Array.isArray(updates.items)) {
-      order.items = updates.items.map((item: any) => ({
-        menuItemId: item.menuItemId,
-        name: item.name,
-        quantity: Number(item.quantity || item.qty),
-        unitPrice: Number(item.unitPrice || item.price),
-        specialInstructions: item.specialInstructions || '',
-        addedByCustomerId: item.addedByCustomerId ? objectIdOrUndefined(item.addedByCustomerId) : (customerObjectId ?? null),
-        addedAt: item.addedAt ? new Date(item.addedAt) : new Date(),
-      })) as any;
-      order.orderSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-    }
+      let calculatedTotal = 0;
+      const newItems = [];
 
-    if (updates.totalAmount !== undefined) order.totalAmount = Number(updates.totalAmount);
+      for (const item of updates.items) {
+        const safeQuantity = Number(item.quantity || item.qty);
+        if (!safeQuantity || isNaN(safeQuantity) || safeQuantity < 1) {
+          throw new Error(`Invalid quantity for menu item: ${item.name}.`);
+        }
+
+        let dbItem = null;
+        if (item.menuItemId && Types.ObjectId.isValid(item.menuItemId)) {
+          dbItem = await MenuItem.findById(item.menuItemId).session(session);
+        }
+        if (!dbItem && item.name) {
+          dbItem = await MenuItem.findOne({ name: item.name }).session(session);
+        }
+
+        const price = dbItem ? dbItem.price : Number(item.unitPrice || item.price);
+        calculatedTotal += price * safeQuantity;
+
+        newItems.push({
+          menuItemId: item.menuItemId,
+          name: item.name,
+          quantity: safeQuantity,
+          unitPrice: price,
+        specialInstructions: item.specialInstructions || '',
+          addedByCustomerId: item.addedByCustomerId ? objectIdOrUndefined(item.addedByCustomerId) : (customerObjectId ?? null),
+          addedAt: item.addedAt ? new Date(item.addedAt) : new Date(),
+        });
+      }
+
+      order.items = newItems as any;
+      order.orderSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+      
+      // Override frontend totalAmount entirely with the correct calculation
+      order.totalAmount = calculatedTotal;
+    } else if (updates.totalAmount !== undefined) {
+      order.totalAmount = Number(updates.totalAmount);
+    }
     if (updates.status !== undefined) order.status = updates.status;
     
     const previousPaymentStatus = order.paymentStatus;
@@ -518,6 +617,28 @@ export const addOrderNote = async (req: Request, res: Response): Promise<void> =
       res.status(404).json({ error: 'Order not found.' });
       return;
     }
+    
+    // Emit real-time events to the table so their UI updates
+    emitToTable(updatedOrder.tableId.toString(), 'order:status_updated', updatedOrder);
+    
+    // Send a notification to the customer if the order has a customer ID
+    if (updatedOrder.customerId && note) {
+      try {
+        const Notification = mongoose.model('Notification');
+        await Notification.create({
+          message: `Update on your order: ${note}`,
+          type: 'General',
+          senderId: (req as any).user?.id || updatedOrder.userId || updatedOrder.tableId,
+          senderModel: 'User',
+          senderRole: 'Waiter',
+          recipientRole: 'Customer',
+          recipientId: updatedOrder.customerId,
+          recipientModel: 'Customer'
+        });
+      } catch (notifErr) {
+        console.error('Failed to create notification for order note:', notifErr);
+      }
+    }
 
     res.status(200).json(updatedOrder);
   } catch (error) {
@@ -540,10 +661,28 @@ export const getTableOrders = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const activeOrders = await Order.find({
+    const user = (req as any).user;
+    const guestSessionId = req.headers['x-guest-session-id'] as string;
+
+    const query: any = {
       tableId: tableObjectId,
       status: { $in: ['Pending', 'Preparing', 'Ready', 'Served'] },
-    }).sort({ createdAt: -1 });
+    };
+
+    // Apply strict filtering if the request is from a customer
+    if (user && user.role === 'Customer') {
+      query.customerId = user._id;
+    } else if (!user && guestSessionId) {
+      const guestCustomer = await Customer.findOne({ guestSessionId });
+      if (guestCustomer) {
+        query.customerId = guestCustomer._id;
+      } else {
+        // If guestCustomer doesn't exist, they can't have orders yet
+        query.customerId = null;
+      }
+    }
+
+    const activeOrders = await Order.find(query).sort({ createdAt: -1 });
 
     res.status(200).json(activeOrders);
   } catch (error) {

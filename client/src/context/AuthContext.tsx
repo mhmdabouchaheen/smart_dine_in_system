@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { AuthUser, LoginPayload, SignupPayload } from '../types'
 import * as api from '../services/api'
+import { clearCurrentTableId, clearIsQrSession } from '../utils/session'
 import { AuthContext } from './authContextValue'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const newUser = {
         ...result.user,
-        role: String(result.user.role).toLowerCase() as AuthUser['role'],
+        role: result.user.role as AuthUser['role'],
       }
 
       setUser(newUser)
@@ -92,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await api.logout()
     sessionStorage.removeItem('guest_user')
+    localStorage.removeItem('noir_sel_guest_session_id')
+    clearCurrentTableId()
+    clearIsQrSession()
     setUser(null)
   }
 

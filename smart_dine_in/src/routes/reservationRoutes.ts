@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { validate } from '../middlewares/validate';
+import { CreateReservationSchema } from '../schemas';
 import {
   createReservation,
   getReservations,
@@ -7,7 +9,7 @@ import {
 
 const router = Router();
 
-router.post('/', createReservation);
+router.post('/', validate(CreateReservationSchema), createReservation);
 router.get('/availability', getAvailability);
 router.get('/', getReservations);
 

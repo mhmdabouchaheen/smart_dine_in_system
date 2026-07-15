@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { validate } from '../middlewares/validate';
+import { CreateOrderSchema } from '../schemas';
 import {
   createOrder,
   getActiveOrders,
@@ -12,7 +14,7 @@ import {
 const router = Router();
 
 // General Routes
-router.route('/').post(createOrder);
+router.route('/').post(validate(CreateOrderSchema), createOrder);
 router.route('/active').get(getActiveOrders);
 router.route('/assistance').post(requestAssistance);
 

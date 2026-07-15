@@ -63,3 +63,37 @@ export const registerCustomer = async (
     });
   }
 };
+
+export const getProfile = async (req: any, res: Response): Promise<any> => {
+  try {
+    const customerId = req.user?.id;
+    if (!customerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const customer = await Customer.findById(customerId).select('-passwordHash');
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+};
+
+export const updateProfile = async (req: any, res: Response): Promise<any> => {
+  try {
+    const customerId = req.user?.id;
+    if (!customerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { name, phone } = req.body;
+    const customer = await Customer.findByIdAndUpdate(
+      customerId,
+      { name, phone },
+      { new: true, runValidators: true }
+    ).select('-passwordHash');
+
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+    res.status(200).json({ message: 'Profile updated', customer });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+};

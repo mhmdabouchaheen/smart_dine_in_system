@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CreditCard, Lock, CheckCircle2 } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
@@ -68,6 +69,8 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
   const [payError, setPayError] = useState<string | null>(null)
   const [availableTimes, setAvailableTimes] = useState<string[]>([])
   const [isLoadingTimes, setLoadingTimes] = useState(false)
+  const [createdReservationId, setCreatedReservationId] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   if (!table) return null
 
@@ -155,6 +158,12 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
         paymentId: payment._id,
       })
 
+      import('../../utils/session').then(({ setCurrentTableId, setIsQrSession }) => {
+        setCurrentTableId(table!.tableNumber)
+        setIsQrSession(false)  // reservation session: card-only payment
+      })
+
+      setCreatedReservationId(reservation._id)
       setStep('success')
       onConfirmed(reservation)
     } catch {
@@ -309,12 +318,23 @@ export default function ReservationModal({ table, onClose, onConfirmed }: Reserv
           <p className="font-display italic text-2xl mb-2">
             Table {table.tableNumber} is yours, {details.name.split(' ')[0]}.
           </p>
-          <p className="text-bone-dim text-sm max-w-sm mx-auto">
-            We&rsquo;ve sent a confirmation to {details.email}. See you {details.date} at {details.time}.
+          <p className="text-bone-dim text-sm max-w-sm mx-auto mb-8">
+            Your reservation is confirmed for {details.date} at {details.time}. 
+            Would you like to pre-order your food now? (Pre-orders must be paid by card).
           </p>
-          <Button className="mt-8" onClick={handleClose}>
-            Done
-          </Button>
+          <div className="grid gap-3">
+            <Button 
+              onClick={() => {
+                onClose();
+                navigate(`/menu?reservationId=${createdReservationId}&table=${table.tableNumber}`);
+              }}
+            >
+              Pre-order Food Now
+            </Button>
+            <Button variant="ghost" onClick={handleClose}>
+              Maybe Later
+            </Button>
+          </div>
         </div>
       )}
     </Modal>

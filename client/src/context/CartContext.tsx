@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import type { BackendOrderItemPayload, CartItem, MenuItem, OrderItemPayload, OrderRecord } from '../types'
 import * as api from '../services/api'
-import { getCurrentTableId } from '../utils/session'
+import { getCurrentTableId, getGuestSessionId, clearCurrentTableId } from '../utils/session'
 import { useAuth } from './authContextValue'
 import { CartContext, type CartContextValue, type SubmitOptions } from './cartContextValue'
 const CART_STORAGE_KEY = 'noir_sel_cart'
@@ -14,26 +15,43 @@ function toCartItem(menuItem: MenuItem): CartItem {
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const location = useLocation()
+  const [isDrawerOpen, setDrawerOpen] = useState(false)
+  const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+
+  const cartStorageKey = useMemo(() => `noir_sel_cart_${user?._id || 'guest'}`, [user?._id])
+  const activeOrderStorageKey = useMemo(() => {
+    // Re-compute when user changes OR when the URL's table param changes (e.g. after reservation redirect)
+    const tableId = getCurrentTableId() || 'table-unknown'
+    const ownerId = user?._id || 'guest'
+    return `${ACTIVE_ORDER_ID_PREFIX}:${tableId}:${ownerId}`
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, location.search])
+
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      const saved = localStorage.getItem(CART_STORAGE_KEY)
+      const saved = localStorage.getItem(cartStorageKey)
       return saved ? (JSON.parse(saved) as CartItem[]) : []
     } catch {
       return []
     }
   })
-  const [isDrawerOpen, setDrawerOpen] = useState(false)
-  const [activeOrder, setActiveOrder] = useState<OrderRecord | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const activeOrderStorageKey = useMemo(() => {
-    const tableId = getCurrentTableId() || 'table-unknown'
-    const ownerId = user?._id || 'guest'
-    return `${ACTIVE_ORDER_ID_PREFIX}:${tableId}:${ownerId}`
-  }, [user?._id])
 
+  // Switch cart when user logs in or out
   useEffect(() => {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items))
-  }, [items])
+    try {
+      const saved = localStorage.getItem(cartStorageKey)
+      setItems(saved ? (JSON.parse(saved) as CartItem[]) : [])
+    } catch {
+      setItems([])
+    }
+  }, [cartStorageKey])
+
+  // Save cart whenever items or user changes
+  useEffect(() => {
+    localStorage.setItem(cartStorageKey, JSON.stringify(items))
+  }, [items, cartStorageKey])
 
   useEffect(() => {
     refreshActiveOrder()
@@ -123,11 +141,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       })
     } else {
       const params = new URLSearchParams(window.location.search)
-      if (!tableId) {
-        throw new Error('No table is connected. Please scan the QR code on your table again.')
-      }
+      
       order = await api.createOrder({
-        tableId,
+        tableId: tableId || '',
         tableNumber,
 
         reservationId: params.get('reservationId') || undefined,
@@ -139,6 +155,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         needsAssistance: options.needsAssistance,
         customerId,
         userId,
+        guestSessionId: !customerId ? getGuestSessionId() : undefined,
       })
     }
 
@@ -162,44 +179,45 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   async function refreshActiveOrder() {
     const tableId = getCurrentTableId()
-    const isUserGuest = !user || user._id.startsWith('guest-')
+    const savedId = localStorage.getItem(activeOrderStorageKey)
 
-    if (tableId) {
-      const tableOrders = await api.fetchTableOrders(tableId)
-      const tableOrder = tableOrders.find((order) => {
-        if (!ACTIVE_STATUSES.includes(order.status)) return false
-        const isOrderGuest = !order.customerId
-        return isUserGuest ? isOrderGuest : !isOrderGuest
-      })
-
-      if (tableOrder) {
-        setActiveOrder(tableOrder)
-        localStorage.setItem(activeOrderStorageKey, tableOrder._id)
+    // --- Priority 1: restore from saved order ID (most reliable) ---
+    if (savedId) {
+      const order = await api.fetchOrder(savedId)
+      if (order && ACTIVE_STATUSES.includes(order.status) && order.paymentStatus !== 'paid') {
+        setActiveOrder(order)
         return
       }
-    }
-
-    const savedId = localStorage.getItem(activeOrderStorageKey)
-    if (!savedId) {
-      setActiveOrder(null)
-      return
-    }
-
-    const order = await api.fetchOrder(savedId)
-    if (!order || !ACTIVE_STATUSES.includes(order.status)) {
+      // Saved order is done/paid — clean up
       localStorage.removeItem(activeOrderStorageKey)
       setActiveOrder(null)
       return
     }
 
-    const isOrderGuest = !order.customerId
-    if (isUserGuest !== isOrderGuest) {
-      localStorage.removeItem(activeOrderStorageKey)
+    // --- Priority 2: table-based lookup (no saved ID yet, e.g. first open) ---
+    if (!tableId) {
       setActiveOrder(null)
       return
     }
 
-    setActiveOrder(order)
+    const tableOrders = await api.fetchTableOrders(tableId)
+    const loggedInCustomerId = user?.role === 'Customer' && !user._id.startsWith('guest-') ? user._id : null
+
+    const tableOrder = tableOrders.find((order) => {
+      if (!ACTIVE_STATUSES.includes(order.status)) return false
+      if (order.paymentStatus === 'paid') return false
+      // For logged-in customers: match by their customerId
+      if (loggedInCustomerId) return order.customerId === loggedInCustomerId
+      // For guests: match by guestSessionId
+      return order.guestSessionId === getGuestSessionId()
+    })
+
+    if (tableOrder) {
+      setActiveOrder(tableOrder)
+      localStorage.setItem(activeOrderStorageKey, tableOrder._id)
+    } else {
+      setActiveOrder(null)
+    }
   }
 
   const totalCount = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items])

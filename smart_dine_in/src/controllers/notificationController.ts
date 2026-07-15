@@ -153,15 +153,30 @@ export const getMyNotifications = async (
   res: Response,
 ): Promise<void> => {
   try {
-    if (!req.user) {
+    const user = req.user
+    const guestSessionId = req.headers['x-guest-session-id']
+
+    if (!user && !guestSessionId) {
       res.status(401).json({
         error: 'Not authenticated',
       })
       return
     }
 
-    const userId = req.user.id
-    const role = req.user.role
+    let userId: string
+    let role: NotificationRole = 'Customer'
+
+    if (user) {
+      userId = user.id
+      role = user.role as NotificationRole
+    } else {
+      const guestCustomer = await Customer.findOne({ guestSessionId })
+      if (!guestCustomer) {
+        res.status(200).json([])
+        return
+      }
+      userId = guestCustomer._id.toString()
+    }
 
     if (!Types.ObjectId.isValid(userId)) {
       res.status(400).json({
@@ -365,11 +380,27 @@ export const markNotificationRead = async (
   res: Response,
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        error: 'Not authenticated',
-      })
+    const user = req.user
+    const guestSessionId = req.headers['x-guest-session-id']
+
+    if (!user && !guestSessionId) {
+      res.status(401).json({ error: 'Not authenticated' })
       return
+    }
+
+    let userId: string
+    let role: NotificationRole = 'Customer'
+
+    if (user) {
+      userId = user.id
+      role = user.role as NotificationRole
+    } else {
+      const guestCustomer = await Customer.findOne({ guestSessionId })
+      if (!guestCustomer) {
+        res.status(404).json({ error: 'Guest not found' })
+        return
+      }
+      userId = guestCustomer._id.toString()
     }
 
     const id = req.params.id as string
@@ -394,8 +425,8 @@ export const markNotificationRead = async (
     if (
       !canReceiveNotification(
         notification,
-        req.user.id,
-        req.user.role,
+        userId,
+        role,
       )
     ) {
       res.status(403).json({
@@ -408,18 +439,18 @@ export const markNotificationRead = async (
     const alreadyRead =
       userHasReadNotification(
         notification,
-        req.user.id,
+        userId,
       )
 
     if (!alreadyRead) {
       notification.readBy.push({
         userId:
           new Types.ObjectId(
-            req.user.id,
+            userId,
           ),
         userModel:
           modelForRole(
-            req.user.role,
+            role,
           ),
         readAt: new Date(),
       })
@@ -449,16 +480,32 @@ export const markAllNotificationsRead = async (
   res: Response,
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        error: 'Not authenticated',
-      })
+    const user = req.user
+    const guestSessionId = req.headers['x-guest-session-id']
+
+    if (!user && !guestSessionId) {
+      res.status(401).json({ error: 'Not authenticated' })
       return
+    }
+
+    let userId: string
+    let role: NotificationRole = 'Customer'
+
+    if (user) {
+      userId = user.id
+      role = user.role as NotificationRole
+    } else {
+      const guestCustomer = await Customer.findOne({ guestSessionId })
+      if (!guestCustomer) {
+        res.status(200).json({ message: 'No notifications', modifiedCount: 0 })
+        return
+      }
+      userId = guestCustomer._id.toString()
     }
 
     if (
       !Types.ObjectId.isValid(
-        req.user.id,
+        userId,
       )
     ) {
       res.status(400).json({
@@ -471,7 +518,7 @@ export const markAllNotificationsRead = async (
     const notifications =
       await Notification.find({
         recipientRole:
-          req.user.role,
+          role,
         $or: [
           {
             recipientId: {
@@ -484,7 +531,7 @@ export const markAllNotificationsRead = async (
           {
             recipientId:
               new Types.ObjectId(
-                req.user.id,
+                userId,
               ),
           },
         ],
@@ -496,7 +543,7 @@ export const markAllNotificationsRead = async (
       const alreadyRead =
         userHasReadNotification(
           notification,
-          req.user.id,
+          userId,
         )
 
       if (alreadyRead) {
@@ -506,11 +553,11 @@ export const markAllNotificationsRead = async (
       notification.readBy.push({
         userId:
           new Types.ObjectId(
-            req.user.id,
+            userId,
           ),
         userModel:
           modelForRole(
-            req.user.role,
+            role,
           ),
         readAt: new Date(),
       })
@@ -543,11 +590,27 @@ export const deleteNotification = async (
   res: Response,
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        error: 'Not authenticated',
-      })
+    const user = req.user
+    const guestSessionId = req.headers['x-guest-session-id']
+
+    if (!user && !guestSessionId) {
+      res.status(401).json({ error: 'Not authenticated' })
       return
+    }
+
+    let userId: string
+    let role: NotificationRole = 'Customer'
+
+    if (user) {
+      userId = user.id
+      role = user.role as NotificationRole
+    } else {
+      const guestCustomer = await Customer.findOne({ guestSessionId })
+      if (!guestCustomer) {
+        res.status(404).json({ error: 'Guest not found' })
+        return
+      }
+      userId = guestCustomer._id.toString()
     }
 
     const id = req.params.id as string
@@ -573,10 +636,10 @@ export const deleteNotification = async (
 
     const isSender =
       String(notification.senderId) ===
-      req.user.id
+      userId
 
     const isAdmin =
-      req.user.role === 'Admin'
+      role === 'Admin'
 
     if (!isSender && !isAdmin) {
       res.status(403).json({

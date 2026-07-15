@@ -1,7 +1,9 @@
 import app from './app';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import http from 'http';
 import { getSettings } from './services/loyaltyService';
+import { initSocket } from './socket';
 
 dotenv.config();
 
@@ -21,7 +23,10 @@ const startServer = async () => {
     await getSettings();
     console.log("✅ Loyalty settings initialized.");
 
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    initSocket(server);
+
+    server.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
     });
   } catch (error) {

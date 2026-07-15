@@ -88,7 +88,7 @@ export const signupCustomer = async (
   res: Response
 ): Promise<any> => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone } = req.body;
 
     // Check if customer already exists
     const existingCustomer = await Customer.findOne({ email });
@@ -107,6 +107,7 @@ export const signupCustomer = async (
       isGuest: false,
       name,
       email,
+      phone: phone || undefined,
       passwordHash,
       loyaltyPoints: 0,
     });

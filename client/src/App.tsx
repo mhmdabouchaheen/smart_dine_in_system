@@ -11,6 +11,7 @@ import Reservation from './pages/Reservation/Reservation'
 import Login from './pages/Auth/Login'
 import Signup from './pages/Auth/Signup'
 import LoyaltyPage from './pages/customer/LoyaltyPage'
+import Profile from './pages/customer/Profile'
 import OrdersQueue from './pages/staff/OrdersQueue'
 import FloorStatus from './pages/staff/FloorStatus'
 import StaffNotifications from './pages/staff/Notifications'
@@ -49,6 +50,7 @@ export default function App() {
               }
             >
               <Route path="/loyalty" element={<LoyaltyPage />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
 
             <Route
