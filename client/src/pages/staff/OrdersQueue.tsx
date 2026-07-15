@@ -6,7 +6,8 @@ import type { OrderRecord, OrderStatus } from '../../types'
 
 const NEXT_ACTION: Partial<Record<OrderStatus, { label: string; next: OrderStatus }>> = {
   pending: { label: 'Start Preparing', next: 'preparing' },
-  preparing: { label: 'Serve', next: 'served' },
+  preparing: { label: 'Mark Ready', next: 'ready' },
+  ready: { label: 'Serve', next: 'served' },
   served: { label: 'Complete', next: 'completed' },
 }
 

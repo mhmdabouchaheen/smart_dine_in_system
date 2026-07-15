@@ -334,11 +334,18 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
   try {
     const { id } = req.params;
     const { status, paymentStatus } = req.body;
-
-    const order = await Order.findById(id).session(session);
+    const now = new Date();
+    const timingUpdate: Record<string, Date> = {};
+    if (status === 'Preparing') timingUpdate.preparationStartedAt = now;
+    if (status === 'Ready') timingUpdate.readyAt = now;
+    if (status === 'Served') timingUpdate.servedAt = now;
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { status, paymentStatus, ...timingUpdate },
+      { new: true },
+    );
+    
     if (!order) {
-      
-      
       res.status(404).json({ error: 'Order not found.' });
       return;
     }
@@ -349,15 +356,10 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       order.paymentStatus !== 'Paid' &&
       !order.loyaltyProcessed;
 
-    if (status) order.status = status;
-    if (paymentStatus) order.paymentStatus = paymentStatus;
-
     // Free the table when order is fully resolved
     if (status === 'Completed' || status === 'Cancelled') {
       await Table.findByIdAndUpdate(order.tableId, { status: 'Available' }, { session });
     }
-
-    await order.save({ session });
 
     if (isBeingPaid && order.customerId) {
       await awardPointsForOrder(
@@ -367,8 +369,6 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       );
     }
 
-    
-    
     res.status(200).json(order);
   } catch (error) {
     

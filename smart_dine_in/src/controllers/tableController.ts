@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import QRCode from 'qrcode'
 import { Table } from '../models/Table'
+import { Order } from '../models/Order'
 
 const tableMenuUrl = (tableId: string, tableNumber: number, reservationId?: string) => {
   const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -60,8 +61,80 @@ export const getTables = async (
 ): Promise<void> => {
   try {
     const tables = await Table.find().sort({ tableNumber: 1 })
+    const activeOrders = await Order.find({
+      status: { $in: ['Pending', 'Preparing', 'Ready', 'Served'] },
+    })
+      .populate('items.menuItemId', 'preparationTime')
+      .sort({ createdAt: -1 })
+      .lean() as any[]
 
-    res.status(200).json(tables)
+    const latestOrderByTable = new Map<string, any>()
+    for (const order of activeOrders) {
+      const key = String(order.tableId)
+      if (!latestOrderByTable.has(key)) latestOrderByTable.set(key, order)
+    }
+
+    const now = Date.now()
+    const result = tables.map((table) => {
+      const order = latestOrderByTable.get(table._id.toString())
+      if (!order) return table.toObject()
+
+      const estimatedPrepMinutes = Math.max(
+        1,
+        ...order.items.map((item: any) => Number(item.menuItemId?.preparationTime || 10)),
+      )
+      const prepStartValue = order.preparationStartedAt || (order.status !== 'Pending' ? order.updatedAt : undefined)
+      const prepStartedAt = prepStartValue ? new Date(prepStartValue).getTime() : now
+      const readyAt = order.readyAt || (['Ready', 'Served'].includes(order.status) ? order.updatedAt : undefined)
+      const prepEndedAt = readyAt ? new Date(readyAt).getTime() : now
+      const prepElapsedMinutes = Math.max(0, Math.floor((prepEndedAt - prepStartedAt) / 60000))
+      const statusPrepComplete = ['Ready', 'Served'].includes(order.status)
+      const estimateReached = prepElapsedMinutes >= estimatedPrepMinutes
+      const prepComplete = statusPrepComplete || estimateReached
+      const prepRemainingMinutes = Math.max(0, estimatedPrepMinutes - prepElapsedMinutes)
+      const prepProgress = prepComplete
+        ? 100
+        : Math.min(99, Math.round((prepElapsedMinutes / estimatedPrepMinutes) * 100))
+
+      let serveProgress = 0
+      let serveEta = 'Waiting for preparation'
+      if (readyAt) {
+        const serveEnd = order.servedAt ? new Date(order.servedAt).getTime() : now
+        const serveMinutes = Math.max(0, Math.floor((serveEnd - new Date(readyAt).getTime()) / 60000))
+        serveProgress = order.servedAt ? 100 : Math.min(95, serveMinutes * 20)
+        serveEta = order.servedAt ? `Served after ${serveMinutes} min` : `Ready for ${serveMinutes} min`
+      }
+
+      const derivedStatus = order.status === 'Ready'
+        ? 'in_the_pass'
+        : order.status === 'Served'
+          ? 'serving'
+          : 'seated'
+
+      return {
+        ...table.toObject(),
+        status: derivedStatus,
+        currentOrder: {
+          party: order.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0),
+          course: 1,
+          courseName: order.status,
+          seatedAt: new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          prepProgress,
+          prepEta: order.status === 'Pending'
+            ? 'Waiting to start'
+            : statusPrepComplete
+            ? `Prepared in ${prepElapsedMinutes} min`
+            : estimateReached
+              ? 'Estimate reached · awaiting confirmation'
+            : `${prepRemainingMinutes} min left of ${estimatedPrepMinutes}`,
+          serveProgress,
+          serveEta,
+          note: order.note || undefined,
+        },
+      }
+    })
+
+    res.status(200).json(result)
   } catch (error) {
     console.error('❌ Error fetching tables:', error)
 

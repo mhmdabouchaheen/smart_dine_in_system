@@ -36,6 +36,9 @@ export interface IOrder extends Document {
   noteAt?: Date;
   /** True once loyalty points have been awarded for this order. Guards against double-earning. */
   loyaltyProcessed: boolean;
+  preparationStartedAt?: Date;
+  readyAt?: Date;
+  servedAt?: Date;
   
   createdAt: Date;
   updatedAt: Date;
@@ -76,6 +79,9 @@ const OrderSchema = new Schema<IOrder>({
   note: { type: String, default: '' },
   noteAt: { type: Date },
   loyaltyProcessed: { type: Boolean, default: false },
+  preparationStartedAt: { type: Date },
+  readyAt: { type: Date },
+  servedAt: { type: Date },
 }, { timestamps: true });
 
 export const Order = model<IOrder>('Order', OrderSchema);
