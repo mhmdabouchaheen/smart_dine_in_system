@@ -4,7 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   passwordHash: string; // We will encrypt passwords before saving them
-  role: 'admin' | 'manager' | 'waiter' | 'kitchen';
+  role: 'Admin' | 'Manager' | 'Waiter' | 'Kitchen'; // Role of the user in the restaurant
   isActive: boolean; // Easy way to disable accounts if an employee leaves
   phone: string;
   salary: number; // Added salary field for employees
@@ -26,8 +26,8 @@ const UserSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'manager', 'waiter', 'kitchen'],
-    default: 'waiter' // Default role for new employees
+    enum: ['Admin', 'Manager', 'Waiter', 'Kitchen'],
+    default: 'Waiter' // Default role for new employees
   },
   isActive: { 
     type: Boolean, 

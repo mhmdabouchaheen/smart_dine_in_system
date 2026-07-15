@@ -31,7 +31,7 @@ export default function App() {
               <Route path="/menu" element={<Menu />} />
               <Route path="/reservation" element={<Reservation />} />
               <Route path="/notifications" element={
-                <ProtectedRoute allow={['customer']}>
+                <ProtectedRoute allow={['Customer']}>
                   <CustomerNotifications />
                 </ProtectedRoute>
               } />
@@ -41,7 +41,7 @@ export default function App() {
 
             <Route
               element={
-                <ProtectedRoute allow={['admin', 'manager', 'waiter', 'kitchen']}>
+                <ProtectedRoute allow={['Admin', 'Manager', 'Waiter', 'Kitchen']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }
@@ -56,7 +56,7 @@ export default function App() {
 
             <Route
               element={
-                <ProtectedRoute allow={['admin', 'manager']}>
+                <ProtectedRoute allow={['Admin', 'Manager']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }

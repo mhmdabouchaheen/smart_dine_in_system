@@ -28,7 +28,7 @@ const emptyForm: FormState = {
   name: '',
   email: '',
   phone: '',
-  role: 'waiter',
+  role: 'Waiter',
   salary: '',
   password: '',
   isActive: true,
@@ -201,10 +201,10 @@ export default function StaffManagement() {
           <TextInput label="Phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} error={errors.phone} />
           <TextInput label="Password" type="password" value={form.password} onChange={(e) => update('password', e.target.value)} placeholder={editingId ? 'Leave blank to keep current password' : ''} />
           <Select label="Role" value={form.role} onChange={(e) => update('role', e.target.value as UserRole)}>
-            <option value="waiter">Waiter</option>
-            <option value="kitchen">Kitchen</option>
-            <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
+            <option value="Waiter">Waiter</option>
+            <option value="Kitchen">Kitchen</option>
+            <option value="Manager">Manager</option>
+            <option value="Admin">Admin</option>
           </Select>
           <TextInput label="Salary (annual)" type="number" min={0} value={form.salary} onChange={(e) => update('salary', e.target.value)} error={errors.salary} placeholder="52000" />
           <Select

@@ -97,8 +97,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }))
     const tableId = getCurrentTableId() || activeOrder?.tableId || 1
     const tableNumber = Number(tableId) || activeOrder?.tableNumber || 1
-    const customerId = user?.role === 'customer' ? user._id : undefined
-    const userId = user && user.role !== 'customer' ? user._id : undefined
+    const customerId = user?.role === 'Customer' ? user._id : undefined
+    const userId = user && user.role !== 'Customer' ? user._id : undefined
 
     let order: OrderRecord
     if (isEditing && activeOrder) {
@@ -116,10 +116,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       order = await api.createOrder({
         tableId,
         tableNumber,
-<<<<<<< HEAD
+
         reservationId: params.get('reservationId') || undefined,
-=======
->>>>>>> origin/orders-done
+
         items: orderItems,
         totalAmount: total,
         paymentMethod: options.paymentMethod,

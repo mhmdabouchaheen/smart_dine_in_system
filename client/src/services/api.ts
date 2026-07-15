@@ -814,8 +814,9 @@ export async function fetchEmployees(): Promise<Employee[]> {
   try {
     const { data } = await apiClient.get<Employee[]>('/users')
     return data
-  } catch {
-    return delay(employees)
+  } catch (error) {
+    console.error("FETCH EMPLOYEES ERROR:", error)
+    throw error
   }
 }
 

@@ -4,6 +4,8 @@ export type NotificationRole =
   | 'Admin'
   | 'Waiter'
   | 'Customer'
+  | 'Kitchen'
+  | 'Manager'
 
 export type NotificationType =
   | 'Order'
@@ -99,13 +101,13 @@ const NotificationSchema =
 
       senderRole: {
         type: String,
-        enum: ['Admin', 'Waiter', 'Customer'],
+        enum: ['Admin', 'Waiter', 'Customer', 'Kitchen', 'Manager'],
         required: true,
       },
 
       recipientRole: {
         type: String,
-        enum: ['Admin', 'Waiter', 'Customer'],
+        enum: ['Admin', 'Waiter', 'Customer', 'Kitchen', 'Manager'],
         required: true,
       },
 

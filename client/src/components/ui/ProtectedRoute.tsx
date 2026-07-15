@@ -10,7 +10,6 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, allow }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth()
-
   if (isLoading) {
     return <p>Loading...</p>
   }

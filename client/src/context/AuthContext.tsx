@@ -21,9 +21,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await api.getCurrentUser()
 
         setUser({
-          ...result.user,
-          role: String(result.user.role).toLowerCase() as AuthUser['role'],
-        })
+  ...result.user,
+  role: result.user.role as AuthUser['role'],
+})
       } catch {
         setUser(null)
       } finally {
@@ -42,9 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await api.login(payload)
 
       const loggedUser = {
-        ...result.user,
-        role: String(result.user.role).toLowerCase() as AuthUser['role'],
-      }
+  ...result.user,
+  role: result.user.role as AuthUser['role'],
+}
 
       setUser(loggedUser)
 
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       _id: `guest-${Date.now()}`,
       name: 'Guest',
       email: '',
-      role: 'customer',
+      role: 'Customer',
     }
 
     sessionStorage.setItem('guest_user', JSON.stringify(guest))

@@ -27,6 +27,8 @@ const ROLES: NotificationRole[] = [
   'Admin',
   'Waiter',
   'Customer',
+  'Kitchen',
+  'Manager',
 ]
 
 const TYPES: NotificationType[] = [

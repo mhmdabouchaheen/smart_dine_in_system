@@ -196,7 +196,7 @@ export interface PaymentRecord extends PaymentPayload {
   paidAt: string
 }
 
-export type UserRole = 'customer' | 'waiter' | 'kitchen' | 'manager' | 'admin'
+export type UserRole = 'Customer' | 'Waiter' | 'Kitchen' | 'Manager' | 'Admin'
 
 export interface AuthUser {
   _id: string
@@ -234,6 +234,8 @@ export type NotificationRole =
   | 'Admin'
   | 'Waiter'
   | 'Customer'
+  | 'Kitchen'
+  | 'Manager'
 
 export type NotificationType =
   | 'Order'

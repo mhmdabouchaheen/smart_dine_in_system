@@ -44,7 +44,7 @@ export default function Navbar() {
               </NavLink>
             </li>
           ))}
-          {user?.role === 'customer' && (
+          {user?.role === 'Customer' && (
             <li>
               <NavLink
                 to="/notifications"
@@ -68,7 +68,7 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link
-                to={user.role === 'admin' ? '/admin' : user.role === 'waiter' || user.role === 'kitchen' || user.role === 'manager' ? '/staff/orders' : '/'}
+                to={user.role === 'Admin' ? '/admin' : user.role === 'Waiter' || user.role === 'Kitchen' || user.role === 'Manager' ? '/staff/orders' : '/'}
                 className="flex items-center gap-2 text-xs uppercase tracking-widest2 text-bone-dim hover:text-bone"
               >
                 <User size={14} /> {user.name.split(' ')[0]}

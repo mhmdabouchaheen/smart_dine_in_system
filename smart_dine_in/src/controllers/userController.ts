@@ -22,7 +22,7 @@ export const registerUser = async (req: Request, res: Response): Promise<any> =>
   name,
   email,
   passwordHash: hashedPassword,
-  role: role || 'waiter',
+  role: role || 'Waiter',
   isActive: isActive ?? true,
   phone,
   salary: salary ?? 0
@@ -203,7 +203,7 @@ export const createEmployeeAccount = async (
     name,
     email,
     passwordHash: hashedPassword,
-    role: role || 'waiter',
+    role: role || 'Waiter',
     isActive: isActive ?? true,
     phone,
     salary: salary ?? 0

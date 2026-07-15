@@ -19,21 +19,21 @@ const router = express.Router();
 router.post(
  '/register',
  authMiddleware,
- authorizeRoles('admin', 'manager'),
+ authorizeRoles('Admin', 'Manager'),
  registerUser
 );
 
 router.post(
   '/employees',
   authMiddleware,
-  authorizeRoles('admin', 'manager'),
+  authorizeRoles('Admin', 'Manager'),
   createEmployeeAccount
 );
 
 router.get(
  '/',
  authMiddleware,
- authorizeRoles('admin', 'manager'),
+ authorizeRoles('Admin', 'Manager'),
  getEmployees
 );
 
@@ -41,7 +41,7 @@ router.get(
 router.put(
  '/:id',
  authMiddleware,
- authorizeRoles('admin', 'manager'),
+ authorizeRoles('Admin', 'Manager'),
  updateEmployee
 );
 
@@ -49,7 +49,7 @@ router.put(
 router.delete(
  '/:id',
  authMiddleware,
- authorizeRoles('admin', 'manager'),
+ authorizeRoles('Admin', 'Manager'),
  deleteEmployee
 );
 

@@ -23,17 +23,17 @@ interface NavItem {
   roles: DashboardRole[]
 }
 
-type DashboardRole = 'admin' | 'manager' | 'waiter' | 'kitchen'
+type DashboardRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen'
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Orders Dashboard', href: '/staff/orders', icon: ClipboardList, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Floor Status', href: '/staff/floor', icon: Grid3x3, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Menu Management', href: '/staff/menu', icon: BookOpen, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Inventory', href: '/staff/inventory', icon: Boxes, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Tables & QR', href: '/staff/tables', icon: QrCode, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Notifications', href: '/staff/notifications', icon: Bell, roles: ['waiter', 'kitchen', 'admin', 'manager'] },
-  { label: 'Dashboard', href: '/admin', icon: LayoutGrid, roles: ['admin', 'manager'] },
-  { label: 'Staff', href: '/admin/staff', icon: Users, roles: ['admin', 'manager'] },
+  { label: 'Orders Dashboard', href: '/staff/orders', icon: ClipboardList, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Floor Status', href: '/staff/floor', icon: Grid3x3, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Menu Management', href: '/staff/menu', icon: BookOpen, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Inventory', href: '/staff/inventory', icon: Boxes, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Tables & QR', href: '/staff/tables', icon: QrCode, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Notifications', href: '/staff/notifications', icon: Bell, roles: ['Waiter', 'Kitchen', 'Admin', 'Manager'] },
+  { label: 'Dashboard', href: '/admin', icon: LayoutGrid, roles: ['Admin', 'Manager'] },
+  { label: 'Staff', href: '/admin/staff', icon: Users, roles: ['Admin', 'Manager'] },
 ]
 
 const SITE_LINKS = [
@@ -99,7 +99,7 @@ export default function DashboardLayout() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-white/10 flex items-center justify-end px-8 gap-4">
-          {role === 'admin' && (
+          {role === 'Admin' && (
             <Link
               to="/staff/notifications"
               className="flex items-center gap-2 border border-white/15 px-4 py-2 text-xs uppercase tracking-widest2 text-bone-dim hover:border-ember hover:text-ember transition-colors"

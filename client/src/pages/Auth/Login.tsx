@@ -55,8 +55,8 @@ export default function Login() {
     try {
       setFormError(null)
       const user = await login(form)
-      if (user.role === 'admin' || user.role === 'manager') navigate('/admin')
-      else if (user.role === 'waiter' || user.role === 'kitchen') navigate('/staff/orders')
+      if (user.role === 'Admin' || user.role === 'Manager') navigate('/admin')
+      else if (user.role === 'Waiter' || user.role === 'Kitchen') navigate('/staff/orders')
       else navigate('/')
     } catch (error: any) {
   setFormError(
