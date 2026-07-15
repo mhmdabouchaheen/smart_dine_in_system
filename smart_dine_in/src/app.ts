@@ -14,6 +14,8 @@ import customerRoutes from './routes/customerRoutes';
 import managementRoutes from './routes/managementRoutes'
 import notificationRoutes from './routes/notificationRoutes'
 import paymentRoutes from './routes/paymentRoutes'
+import loyaltyRoutes from './routes/loyaltyRoutes';
+
 const app = express()
 
 app.use(
@@ -50,5 +52,6 @@ app.use('/api/auth', authRoutes)
 app.use('/api/customers', customerRoutes);
 app.use('/api/management', managementRoutes)
 app.use('/api/payments', paymentRoutes);
+app.use('/api/loyalty', loyaltyRoutes);
 
 export default app

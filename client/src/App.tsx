@@ -10,6 +10,7 @@ import Menu from './pages/Menu/Menu'
 import Reservation from './pages/Reservation/Reservation'
 import Login from './pages/Auth/Login'
 import Signup from './pages/Auth/Signup'
+import LoyaltyPage from './pages/customer/LoyaltyPage'
 import OrdersQueue from './pages/staff/OrdersQueue'
 import FloorStatus from './pages/staff/FloorStatus'
 import StaffNotifications from './pages/staff/Notifications'
@@ -19,6 +20,7 @@ import QRCodeManager from './pages/staff/QRCodeManager'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import StaffManagement from './pages/admin/StaffManagement'
 import CustomerNotifications from './pages/customer/Notifications'
+import LoyaltyManagement from './pages/admin/LoyaltyManagement'
 
 export default function App() {
   return (
@@ -41,7 +43,17 @@ export default function App() {
 
             <Route
               element={
-                <ProtectedRoute allow={['Admin', 'Manager', 'Waiter', 'Kitchen']}>
+                <ProtectedRoute allow={['Customer']}>
+                  <SiteLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/loyalty" element={<LoyaltyPage />} />
+            </Route>
+
+            <Route
+              element={
+                <ProtectedRoute allow={['Waiter', 'Kitchen', 'Manager',  'Admin']}>
                   <DashboardLayout />
                 </ProtectedRoute>
               }
@@ -63,6 +75,7 @@ export default function App() {
             >
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/staff" element={<StaffManagement />} />
+              <Route path="/admin/loyalty" element={<LoyaltyManagement />} />
             </Route>
           </Routes>
         </CartProvider>

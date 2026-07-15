@@ -23,6 +23,11 @@ import type {
   StockCheckResult,
   OrderItemPayload,
   UpdateOrderPayload,
+  LoyaltySummary,
+  LoyaltySettings as LoyaltySettingsType,
+  LoyaltyTransaction,
+  CalculateRedemptionResponse,
+  RedeemResponse,
 } from '../types'
 import { tables, floorStats, qrCodes, employees, dashboardStats, reservations } from './mockData'
 import * as ordersStore from './ordersStore'
@@ -118,6 +123,8 @@ function normalizeOrderRecord(order: any): OrderRecord {
       price: Number(line.unitPrice || line.price || 0),
     })),
     total: Number(order.totalAmount || order.total || 0),
+    loyaltyDiscount: order.loyaltyDiscount !== undefined ? Number(order.loyaltyDiscount) : undefined,
+    amountDue: order.amountDue !== undefined ? Number(order.amountDue) : undefined,
     status: normalizeOrderStatus(order.status),
     paymentMethod: order.paymentMethod === 'staff_assisted' ? 'staff_assisted' : 'card',
     paymentStatus: String(order.paymentStatus || 'Pending').toLowerCase() === 'paid' ? 'paid' : 'unpaid',
@@ -889,4 +896,82 @@ export async function fetchTableOrders(tableId: string | number): Promise<OrderR
 }
 
 
+// === Loyalty Rewards System (Phase 4 addition) ==============================
+
+export async function fetchMyLoyaltySummary(): Promise<LoyaltySummary> {
+  const { data } = await apiClient.get<LoyaltySummary>('/loyalty/me')
+  return data
+}
+
+export async function fetchMyTransactions(page = 1, limit = 10): Promise<{
+  transactions: LoyaltyTransaction[]
+  page: number
+  limit: number
+  totalPages: number
+  total: number
+}> {
+  const { data } = await apiClient.get<any>(`/loyalty/me/transactions?page=${page}&limit=${limit}`)
+  return data
+}
+
+export async function calculateRedemption(orderId: string): Promise<CalculateRedemptionResponse> {
+  const { data } = await apiClient.post<CalculateRedemptionResponse>('/loyalty/calculate-redemption', { orderId })
+  return data
+}
+
+export async function redeemLoyaltyPoints(orderId: string, pointsToRedeem: number): Promise<RedeemResponse> {
+  const { data } = await apiClient.post<RedeemResponse>('/loyalty/redeem', { orderId, pointsToRedeem })
+  return data
+}
+
+export async function fetchLoyaltySettings(): Promise<LoyaltySettingsType> {
+  const { data } = await apiClient.get<LoyaltySettingsType>('/loyalty/settings')
+  return data
+}
+
+export async function updateLoyaltySettings(settings: Partial<LoyaltySettingsType>): Promise<LoyaltySettingsType> {
+  const { data } = await apiClient.put<LoyaltySettingsType>('/loyalty/settings', settings)
+  return data
+}
+
+export async function fetchCustomersLoyalty(page = 1, limit = 20): Promise<{
+  customers: any[]
+  page: number
+  limit: number
+  totalPages: number
+  total: number
+}> {
+  const { data } = await apiClient.get<any>(`/loyalty/customers?page=${page}&limit=${limit}`)
+  return data
+}
+
+export async function fetchCustomerLoyaltyProfile(id: string): Promise<{
+  customer: any
+  transactions: LoyaltyTransaction[]
+}> {
+  const { data } = await apiClient.get<any>(`/loyalty/customers/${id}`)
+  return data
+}
+
+export async function adjustCustomerPoints(customerId: string, points: number, reason: string): Promise<any> {
+  const { data } = await apiClient.post<any>('/loyalty/adjust', { customerId, points, reason })
+  return data
+}
+
+export async function fetchTableLoyaltyHistory(tableId: string | number): Promise<{
+  tableId: string
+  transactions: LoyaltyTransaction[]
+}> {
+  const { data } = await apiClient.get<any>(`/loyalty/history/table/${tableId}`)
+  return data
+}
+
+export async function fetchCustomerDetailedHistory(customerId: string): Promise<{
+  customer: any
+  transactions: LoyaltyTransaction[]
+  orders: OrderRecord[]
+}> {
+  const { data } = await apiClient.get<any>(`/loyalty/history/customer/${customerId}`)
+  return data
+}
 

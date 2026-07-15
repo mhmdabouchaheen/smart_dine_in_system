@@ -16,6 +16,12 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const isGuest = user && user._id.startsWith('guest-')
+  const links = [...NAV_LINKS]
+  if (user && user.role === 'Customer' && !isGuest) {
+    links.push({ label: 'Rewards', href: '/loyalty' })
+  }
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
     window.addEventListener('scroll', onScroll)
@@ -34,7 +40,7 @@ export default function Navbar() {
         </Link>
 
         <ul className="hidden md:flex items-center gap-10 text-xs uppercase tracking-widest2 text-bone-dim">
-          {NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <li key={link.href}>
               <NavLink
                 to={link.href}
@@ -91,7 +97,7 @@ export default function Navbar() {
 
       {mobileOpen && (
         <div className="md:hidden bg-noir-950 border-t border-white/10 px-6 py-6 flex flex-col gap-5">
-          {NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <Link
               key={link.href}
               to={link.href}

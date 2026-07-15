@@ -26,6 +26,7 @@ export interface CartContextValue {
   submitOrder: (options: SubmitOptions) => Promise<OrderRecord>
   requestAssistanceForActiveOrder: (reason: string) => Promise<void>
   refreshActiveOrder: () => Promise<void>
+  clearActiveOrder: () => void
 }
 
 export const CartContext = createContext<CartContextValue | null>(null)
