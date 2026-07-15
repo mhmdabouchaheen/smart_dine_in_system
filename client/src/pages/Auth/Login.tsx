@@ -57,7 +57,7 @@ export default function Login() {
       const user = await login(form)
       if (user.role === 'admin' || user.role === 'manager') navigate('/admin')
       else if (user.role === 'waiter' || user.role === 'kitchen') navigate('/staff/orders')
-      else navigate('/')
+      else await finishCustomerEntry()
     } catch (error: any) {
   setFormError(
     error.response?.data?.error || 'Could not sign you in. Check your details and try again.'

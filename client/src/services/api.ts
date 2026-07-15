@@ -408,6 +408,15 @@ function normalizeTableStatus(status: unknown): TableEntity['status'] {
     case 'occupied':
       return 'seated'
 
+    case 'seated':
+      return 'seated'
+
+    case 'in_the_pass':
+      return 'in_the_pass'
+
+    case 'serving':
+      return 'serving'
+
     case 'reserved':
       return 'reserved'
 
@@ -429,6 +438,7 @@ export async function fetchTables(): Promise<TableEntity[]> {
       capacity: Number(table.capacity),
       zone: table.zone || 'Dining Room',
       status: normalizeTableStatus(table.status),
+      currentOrder: table.currentOrder,
     }))
   } catch {
     return delay(tables)
@@ -516,7 +526,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderRec
         unitPrice: item.price,
         specialInstructions: '',
       })),
-      customerId: payload.tableId,
+      customerId: payload.customerId,
       reservationId: payload.reservationId,
       paymentMethod: payload.paymentMethod,
       paymentStatus: payload.paymentStatus === 'paid' ? 'Paid' : 'Pending',
@@ -524,7 +534,10 @@ export async function createOrder(payload: CreateOrderPayload): Promise<OrderRec
       userId: payload.userId,
     })
     return normalizeOrderRecord(data)
-  } catch {
+  } catch (error) {
+    // Do not turn a rejected backend order into a local fake order. That would
+    // make the customer think it succeeded while staff cannot see it.
+    if (axios.isAxiosError(error) && error.response) throw error
     const now = new Date().toISOString()
     const order: OrderRecord = {
       _id: `order-${Date.now()}`,

@@ -25,6 +25,9 @@ export interface IOrder extends Document {
   needsAssistance?: boolean;
   note?: string;
   noteAt?: Date;
+  preparationStartedAt?: Date;
+  readyAt?: Date;
+  servedAt?: Date;
   
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +60,9 @@ const OrderSchema = new Schema<IOrder>({
   needsAssistance: { type: Boolean, default: false },
   note: { type: String, default: '' },
   noteAt: { type: Date },
+  preparationStartedAt: { type: Date },
+  readyAt: { type: Date },
+  servedAt: { type: Date },
 }, { timestamps: true });
 
 export const Order = model<IOrder>('Order', OrderSchema);

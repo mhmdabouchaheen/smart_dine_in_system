@@ -216,7 +216,16 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
   try {
     const { id } = req.params;
     const { status, paymentStatus } = req.body;
-    const updatedOrder = await Order.findByIdAndUpdate(id, { status, paymentStatus }, { new: true });
+    const now = new Date();
+    const timingUpdate: Record<string, Date> = {};
+    if (status === 'Preparing') timingUpdate.preparationStartedAt = now;
+    if (status === 'Ready') timingUpdate.readyAt = now;
+    if (status === 'Served') timingUpdate.servedAt = now;
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      { status, paymentStatus, ...timingUpdate },
+      { new: true },
+    );
     
     if (updatedOrder && (status === 'Completed' || status === 'Cancelled')) {
       await Table.findByIdAndUpdate(updatedOrder.tableId, { status: 'Available' });

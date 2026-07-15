@@ -29,6 +29,8 @@ export default function FloorStatus() {
 
   useEffect(() => {
     load()
+    const interval = window.setInterval(load, 30000)
+    return () => window.clearInterval(interval)
   }, [load])
 
   return (
@@ -104,10 +106,8 @@ export default function FloorStatus() {
                     <p className="font-display text-lg">{table.currentOrder.party}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest2 text-bone-faint mb-1">Course</p>
-                    <p className="font-display text-lg">
-                      0{table.currentOrder.course} &middot; {table.currentOrder.courseName}
-                    </p>
+                    <p className="text-[10px] uppercase tracking-widest2 text-bone-faint mb-1">Order Status</p>
+                    <p className="font-display text-lg">{table.currentOrder.courseName}</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest2 text-bone-faint mb-1">Seated</p>

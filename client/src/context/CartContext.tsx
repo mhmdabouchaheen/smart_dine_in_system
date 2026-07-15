@@ -95,8 +95,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       unitPrice: i.price,
       specialInstructions: '',
     }))
-    const tableId = getCurrentTableId() || activeOrder?.tableId || 1
-    const tableNumber = Number(tableId) || activeOrder?.tableNumber || 1
+    const tableId = getCurrentTableId() || activeOrder?.tableId
+    const urlTableNumber = Number(new URLSearchParams(window.location.search).get('tableNumber'))
+    const tableNumber = urlTableNumber || activeOrder?.tableNumber || 1
     const customerId = user?.role === 'customer' ? user._id : undefined
     const userId = user && user.role !== 'customer' ? user._id : undefined
 
@@ -111,15 +112,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
       })
     } else {
       const params = new URLSearchParams(window.location.search)
-      const tableId = params.get('tableId') || 'table-01'
-      const tableNumber = Number(params.get('tableNumber') || 1)
+      if (!tableId) {
+        throw new Error('No table is connected. Please scan the QR code on your table again.')
+      }
       order = await api.createOrder({
         tableId,
         tableNumber,
-<<<<<<< HEAD
+
         reservationId: params.get('reservationId') || undefined,
-=======
->>>>>>> origin/orders-done
+
         items: orderItems,
         totalAmount: total,
         paymentMethod: options.paymentMethod,
