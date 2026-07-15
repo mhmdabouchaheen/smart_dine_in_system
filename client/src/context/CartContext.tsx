@@ -101,6 +101,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const userId = user && user.role !== 'customer' ? user._id : undefined
 
     let order: OrderRecord
+    
+    if (items.length === 0 && activeOrder && options.paymentStatus === 'paid') {
+      order = await api.updateOrder(activeOrder._id, {
+        paymentStatus: 'Paid',
+        paymentMethod: options.paymentMethod,
+        needsAssistance: options.needsAssistance,
+      })
+      setActiveOrder(order)
+      return order
+    }
+
     if (isEditing && activeOrder) {
       order = await api.updateOrder(activeOrder._id, {
         items: backendOrderItems,
@@ -108,6 +119,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         paymentStatus: options.paymentStatus === 'paid' ? 'Paid' : 'Pending',
         needsAssistance: options.needsAssistance ?? false,
         status: 'Pending',
+        customerId,
       })
     } else {
       order = await api.createOrder({
@@ -128,6 +140,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems([])
     setIsEditing(false)
     return order
+  }
+
+  function clearActiveOrder() {
+    localStorage.removeItem(activeOrderStorageKey)
+    setActiveOrder(null)
   }
 
   async function requestAssistanceForActiveOrder(reason: string) {
@@ -196,6 +213,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     },
     closeDrawer: () => setDrawerOpen(false),
     toggleDrawer: () => setDrawerOpen((v) => !v),
+
+
     activeOrder,
     isEditing,
     startEditing,
@@ -203,6 +222,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     submitOrder,
     requestAssistanceForActiveOrder,
     refreshActiveOrder,
+    clearActiveOrder,
   }
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

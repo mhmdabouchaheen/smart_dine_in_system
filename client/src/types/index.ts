@@ -120,6 +120,7 @@ export interface UpdateOrderPayload {
   needsAssistance?: boolean
   note?: string
   noteAt?: string
+  customerId?: string
 }
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled'
@@ -149,6 +150,8 @@ export interface OrderRecord {
   userIds?: string[]
   items: OrderItemPayload[]
   total: number
+  loyaltyDiscount?: number
+  amountDue?: number
   status: OrderStatus
   paymentMethod: PaymentMethod
   paymentStatus: OrderPaymentStatus
@@ -278,10 +281,13 @@ export interface DashboardStats {
 }
 
 export interface FloorStats {
-  tables: number
-  coversSeated: number
-  available: number
-  seated: number
-  inThePass: number
-  serving: number
+  tables: number;
+  coversSeated: number;
+  available: number;
+  seated: number;
+  inThePass: number;
+  serving: number;
 }
+
+export * from './loyalty';
+

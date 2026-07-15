@@ -12,6 +12,7 @@ import {
   Home,
   BookOpen,
   Boxes,
+  Coins,
 } from 'lucide-react'
 import { useAuth } from '../context/authContextValue'
 import NotificationBell from '../components/ui/NotificationBell'
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Notifications', href: '/staff/notifications', icon: Bell, roles: ['staff', 'admin'] },
   { label: 'Dashboard', href: '/admin', icon: LayoutGrid, roles: ['admin'] },
   { label: 'Staff', href: '/admin/staff', icon: Users, roles: ['admin'] },
+  { label: 'Loyalty Rewards', href: '/admin/loyalty', icon: Coins, roles: ['admin'] },
 ]
 
 const SITE_LINKS = [
